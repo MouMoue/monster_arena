@@ -47,7 +47,7 @@ const CONFIG = {
     cindrill:    { name: '辛德钻',   element: '火', price: 1200, level: 6,  damage: 30, cooldown: 1.5, effect: 'fire' },
     gulfin:      { name: '高尔芬',   element: '水', price: 1300, level: 6,  damage: 24, cooldown: 1.3, effect: 'splash', kb: 18 },
     jacana:      { name: '贾卡纳',   element: '水', price: 1500, level: 7,  damage: 22, cooldown: 1.0, effect: 'splash', kb: 12 },
-    friolera:    { name: '芙琳拉',   element: '冰', price: 1500, level: 7,  damage: 22, cooldown: 1.5, effect: 'ice', slow: 2.0 },
+    friolera:    { name: '芙琳拉',   element: '冰', face: 'right', price: 1500, level: 7,  damage: 22, cooldown: 1.5, effect: 'ice', slow: 2.0 },
     ivieron:     { name: '艾维龙',   element: '草', price: 1800, level: 8,  damage: 34, cooldown: 1.5, effect: 'green' },
     pluma:       { name: '普鲁玛',   element: '风', price: 2200, level: 9,  damage: 30, cooldown: 0.9, effect: 'scratch' },
     charmadillo: { name: '查玛甲',   element: '火', price: 2600, level: 10, damage: 45, cooldown: 1.8, effect: 'fire' },
@@ -103,23 +103,23 @@ const CONFIG = {
   },
   mercTierNames: ['Ⅰ·蓝', 'Ⅱ·黄', 'Ⅲ·紫', 'Ⅳ·红'],
   mercColors: ['Blue', 'Yellow', 'Purple', 'Red'],
-  mercSlots: { pawn: [0, 64], warrior: [-74, -44], archer: [74, -44] },
+  mercSlots: { pawn: [0, 92], warrior: [-100, -58], archer: [100, -58] },
   mercRespawn: 15,          // 阵亡后复活秒数（播放 Dead.png 动画）
 
   // 拾取物（Tiny Swords resources：G 金 / M 肉 / W 木，Spawn 落地动画 + Idle 待拾取）
   pickups: {
-    gold: { coins: 20, label: '+20 金币' },
+    gold: { coins: 10, label: '+10 金币' },
     meat: { heal: 25,  label: '+25 生命' },
-    wood: { xp: 14,    label: '+14 经验' },
+    wood: { xp: 10,    label: '+10 经验' },
   },
-  dropRates: { meat: 0.10, gold: 0.08, wood: 0.08 },
+  dropRates: { meat: 0.10, gold: 0.06, wood: 0.07 },
   pickupLife: 25,
 
   // 怪物图鉴
   // luizmelo 四怪(150px帧/单行文件) + Tiny Swords 哥布林军团(192/128px帧/多行雪碧图, 4色=4梯队)
   monsters: {
     goblin: {
-      hp: 50, speed: 120, damage: 10, radius: 22, coin: 5, xp: 8, kbMul: 1,
+      hp: 50, speed: 120, damage: 10, radius: 22, coin: 2, xp: 6, kbMul: 1,
       frame: 150, scale: 1.5, bodyOffsetY: 26, behavior: 'melee',
       attackRange: 65, attackCooldown: 1.0, hitFrame: 5, attacks: ['attack', 'attack2'],
       anims: {
@@ -132,7 +132,7 @@ const CONFIG = {
       },
     },
     flyingEye: {
-      hp: 30, speed: 210, damage: 8, radius: 20, coin: 6, xp: 10, kbMul: 1,
+      hp: 30, speed: 210, damage: 8, radius: 20, coin: 3, xp: 8, kbMul: 1,
       frame: 150, scale: 1.4, bodyOffsetY: 34, behavior: 'melee',
       attackRange: 55, attackCooldown: 0.8, hitFrame: 4, attacks: ['attack', 'attack2'],
       anims: {
@@ -144,7 +144,7 @@ const CONFIG = {
       },
     },
     mushroom: {
-      hp: 40, speed: 80, damage: 12, radius: 20, coin: 8, xp: 12, kbMul: 1,
+      hp: 40, speed: 80, damage: 12, radius: 20, coin: 4, xp: 9, kbMul: 1,
       frame: 150, scale: 1.5, bodyOffsetY: 26, behavior: 'ranged',
       attackRange: 280, attackCooldown: 1.8, hitFrame: 5, attacks: ['attack', 'attack2'],
       projectile: { file: 'mushroom/Projectile_sprite.png', frames: 8, fps: 12, size: 50, scale: 1.1, speed: 230, radius: 10 },
@@ -158,7 +158,7 @@ const CONFIG = {
       },
     },
     skeleton: {
-      hp: 150, speed: 70, damage: 20, radius: 24, coin: 15, xp: 25, kbMul: 0.3,
+      hp: 150, speed: 70, damage: 20, radius: 24, coin: 7, xp: 18, kbMul: 0.3,
       frame: 150, scale: 1.6, bodyOffsetY: 26, behavior: 'melee',
       attackRange: 85, attackCooldown: 1.4, hitFrame: 5, attacks: ['attack', 'attack2'],
       anims: {
@@ -171,7 +171,7 @@ const CONFIG = {
       },
     },
     torchGob: {                      // 火把哥布林：近战挥火把，命中带火焰特效
-      hp: 60, speed: 145, damage: 12, radius: 20, coin: 8, xp: 12, kbMul: 0.8,
+      hp: 60, speed: 145, damage: 12, radius: 20, coin: 3, xp: 9, kbMul: 0.8,
       frame: 192, scale: 0.95, bodyOffsetY: 22, behavior: 'melee',
       attackRange: 70, attackCooldown: 1.1, hitFrame: 3, attacks: ['attack'], fireFx: true,
       tierSheets: ['torch/blue/Torch_Blue.png', 'torch/yellow/Torch_Yellow.png', 'torch/purple/Torch_Purple.png', 'torch/red/Torch_Red.png'],
@@ -182,7 +182,7 @@ const CONFIG = {
       },
     },
     tntGob: {                        // TNT 哥布林：远程抛炸药，落点爆炸
-      hp: 45, speed: 115, damage: 16, radius: 20, coin: 10, xp: 14, kbMul: 1,
+      hp: 45, speed: 115, damage: 16, radius: 20, coin: 4, xp: 10, kbMul: 1,
       frame: 192, scale: 0.95, bodyOffsetY: 22, behavior: 'lob',
       attackRange: 430, attackCooldown: 2.2, hitFrame: 4, attacks: ['attack'],
       tierSheets: ['tnt/blue/TNT_Blue.png', 'tnt/yellow/TNT_Yellow.png', 'tnt/purple/TNT_Purple.png', 'tnt/red/TNT_Red.png'],
@@ -193,7 +193,7 @@ const CONFIG = {
       },
     },
     barrelGob: {                     // 自爆桶哥布林：滚向主角贴脸引爆（被打死也会炸）
-      hp: 40, speed: 175, damage: 30, radius: 18, coin: 12, xp: 16, kbMul: 0.6,
+      hp: 40, speed: 175, damage: 30, radius: 18, coin: 5, xp: 12, kbMul: 0.6,
       frame: 128, scale: 1.1, bodyOffsetY: 14, behavior: 'kamikaze',
       attackRange: 55, attackCooldown: 9, hitFrame: 2, attacks: ['attack'], explodes: true,
       tierSheets: ['barrel/blue/Barrel_Blue.png', 'barrel/yellow/Barrel_Yellow.png', 'barrel/purple/Barrel_Purple.png', 'barrel/red/Barrel_Red.png'],
@@ -220,19 +220,19 @@ const CONFIG = {
   stagger: 1.4,
 
   difficulty: [
-    { until: 30,       interval: 2.0, cap: 8,  hpMul: 1.0, weights: { goblin: 0.55, torchGob: 0.45 } },
-    { until: 60,       interval: 1.2, cap: 15, hpMul: 1.2, weights: { goblin: 0.3, flyingEye: 0.2, torchGob: 0.3, tntGob: 0.2 } },
-    { until: 120,      interval: 0.8, cap: 25, hpMul: 1.5, weights: { goblin: 0.18, flyingEye: 0.14, mushroom: 0.14, skeleton: 0.09, torchGob: 0.2, tntGob: 0.15, barrelGob: 0.1 } },
-    { until: Infinity, interval: 0.5, cap: 40, hpMul: 2.0, hpRampPer60s: 0.5, weights: { goblin: 0.13, flyingEye: 0.11, mushroom: 0.12, skeleton: 0.11, torchGob: 0.18, tntGob: 0.16, barrelGob: 0.19 } },
+    { until: 30,       interval: 1.6,  cap: 10, hpMul: 1.0, weights: { goblin: 0.55, torchGob: 0.45 } },
+    { until: 60,       interval: 0.95, cap: 20, hpMul: 1.3, weights: { goblin: 0.3, flyingEye: 0.2, torchGob: 0.3, tntGob: 0.2 } },
+    { until: 120,      interval: 0.6,  cap: 32, hpMul: 1.8, weights: { goblin: 0.18, flyingEye: 0.14, mushroom: 0.14, skeleton: 0.09, torchGob: 0.2, tntGob: 0.15, barrelGob: 0.1 } },
+    { until: Infinity, interval: 0.4,  cap: 50, hpMul: 2.4, hpRampPer60s: 0.7, weights: { goblin: 0.13, flyingEye: 0.11, mushroom: 0.12, skeleton: 0.11, torchGob: 0.18, tntGob: 0.16, barrelGob: 0.19 } },
   ],
 
   difficulties: {
     easy:   { name: '简单', spawnMul: 1.4, hpMul: 0.8, dmgMul: 0.7, coinMul: 1.0 },
     normal: { name: '普通', spawnMul: 1.0, hpMul: 1.0, dmgMul: 1.0, coinMul: 1.2 },
-    hard:   { name: '困难', spawnMul: 0.7, hpMul: 1.4, dmgMul: 1.4, coinMul: 1.6 },
+    hard:   { name: '困难', spawnMul: 0.6, hpMul: 1.5, dmgMul: 1.5, coinMul: 1.6 },
   },
 
-  xp: { base: 60, growth: 40 },
+  xp: { base: 100, growth: 75 },
 
   mobileMonsterCap: 30,
   spawnDist: [600, 740],

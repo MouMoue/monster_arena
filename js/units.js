@@ -141,6 +141,20 @@ function updateUnits(dt) {
       mc.moving = true;
       if (Math.abs(dx) > 4) mc.flip = dx < 0;
     } else mc.moving = false;
+    // 分离推挤：不和主角/其他佣兵叠在一起
+    const pd = Math.hypot(mc.x - player.x, mc.y - player.y);
+    if (pd > 0 && pd < 46) {
+      const px = mc.x + (mc.x - player.x) / pd * (46 - pd), py = mc.y + (mc.y - player.y) / pd * (46 - pd);
+      if (MAPGEN.walkable(px, py)) { mc.x = px; mc.y = py; }
+    }
+    for (const other of mercs) {
+      if (other === mc || other.state === 'dead') continue;
+      const od = Math.hypot(mc.x - other.x, mc.y - other.y);
+      if (od > 0 && od < 36) {
+        const px = mc.x + (mc.x - other.x) / od * (36 - od) * 0.5, py = mc.y + (mc.y - other.y) / od * (36 - od) * 0.5;
+        if (MAPGEN.walkable(px, py)) { mc.x = px; mc.y = py; }
+      }
+    }
     // 侍从代收
     if (mc.cls === 'pawn') {
       for (let i = pickups.length - 1; i >= 0; i--) {

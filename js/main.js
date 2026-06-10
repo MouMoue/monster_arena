@@ -26,6 +26,7 @@ let state = 'title';
 let player, bullets, monsters, eprojs, pets, petProjs, effects, floaters;
 let playTime, kills, runCoins, spawnTimer, stats, worldT = 0;
 let shopTab = 'weapon';
+let shopFrom = 'title';      // 商城来源：title / game / gameover（决定返回去向）
 let lastTap = null;
 const cam = { x: 0, y: 0 };
 
@@ -180,6 +181,43 @@ function onKill(m) {
   addFloater(m.x, m.y - 40, `+${gain}`, '#FAC775');
   dropFrom(m);
   if (cfg.explodes) spawnExplosion(m.x, m.y);
+}
+
+// 局内购物立即生效：武器/装备换算属性（血量上限提升的部分直接补上）、精灵换人、佣兵入场/升级
+function applyLoadout() {
+  if (!player) return;
+  const oldMax = stats.maxHp;
+  stats = effectiveStats();
+  if (stats.maxHp > oldMax) player.hp += stats.maxHp - oldMax;
+  player.hp = Math.min(player.hp, stats.maxHp);
+  player.weaponVisual = stats.weapon.visual;
+  if (!pets.length || pets[0].id !== meta.activePet) {
+    pets = (meta.activePet ? [meta.activePet] : []).map((id, i) => ({
+      id, slot: i,
+      x: player.x + CONFIG.petSlots[i][0], y: player.y + CONFIG.petSlots[i][1],
+      state: 'idle', animT: Math.random(), atkCd: 0.5, casted: false, target: null, flip: false,
+    }));
+  }
+  for (const cls of ['pawn', 'warrior', 'archer']) {
+    const tier = meta.mercTier[cls];
+    if (tier < 0) continue;
+    const cfg = CONFIG.mercs[cls];
+    const mul = 1 + tier * 0.5;
+    const mc = mercs.find(m => m.cls === cls);
+    if (!mc) {
+      mercs.push({
+        cls, tier, maxHp: Math.round(cfg.hp * mul), hp: Math.round(cfg.hp * mul), dmg: Math.round(cfg.damage * mul),
+        x: player.x + CONFIG.mercSlots[cls][0], y: player.y + CONFIG.mercSlots[cls][1],
+        state: 'idle', animT: Math.random(), atkCd: 1, hitDone: false, target: null, flip: false, deadT: 0,
+      });
+    } else if (mc.tier !== tier) {
+      mc.tier = tier;
+      mc.maxHp = Math.round(cfg.hp * mul);
+      mc.hp = mc.maxHp;                 // 升级即满血归队
+      mc.dmg = Math.round(cfg.damage * mul);
+      if (mc.state === 'dead') { mc.state = 'idle'; mc.deadT = 0; }
+    }
+  }
 }
 
 function damageMonster(m, dmg, kbx, kby) {
@@ -455,8 +493,8 @@ function update(dt) {
     if (c.camp && c.camp.active && !c.camp.cleared) {
       if (c.camp.units.every(u => u.hp <= 0 || !monsters.includes(u))) {
         c.camp.cleared = true;
-        grantCoins(40);
-        addFloater(c.camp.x, c.camp.y - 80, '营地肃清 +40 金币', '#FAC775', 1.4);
+        grantCoins(25);
+        addFloater(c.camp.x, c.camp.y - 80, '营地肃清 +25 金币', '#FAC775', 1.4);
       }
     }
     for (const sc of c.scenery) {
@@ -612,7 +650,10 @@ function drawPet(pet) {
   shadow(pet.x, pet.y + size * 0.30, size * 0.22);
   ctx.save();
   ctx.translate(pet.x, pet.y);
-  if (pet.flip) ctx.scale(-1, 1);
+  // pet.flip = 想面向左；素材默认原生朝左（个别 face:'right' 的原生朝右），按需镜像
+  const nativeRight = CONFIG.pets[pet.id].face === 'right';
+  const mirror = nativeRight ? pet.flip : !pet.flip;
+  if (mirror) ctx.scale(-1, 1);
   ctx.drawImage(petImgs[pet.id], f * ps.frame, row * ps.frame, ps.frame, ps.frame, -size / 2, -size / 2, size, size);
   ctx.restore();
 }
@@ -747,15 +788,17 @@ function drawHUD() {
 
   ctx.textAlign = 'right';
   ctx.font = '16px -apple-system, sans-serif';
-  ctx.fillText(`击杀 ${kills}`, W - (input.touchSeen ? 70 : 20), 30);
+  ctx.fillText(`击杀 ${kills}`, W - 100, 30);
   ctx.font = '12px -apple-system, sans-serif';
   ctx.fillStyle = C.hudDim;
-  ctx.fillText(stats.weapon.name, W - (input.touchSeen ? 70 : 20), 48);
+  ctx.fillText(stats.weapon.name, W - 100, 48);
 
-  if (input.touchSeen) drawPauseBtn();
+  drawPauseBtn();
+  iconBtn('gameShop', GAME_SHOP_BTN, 6, 'blue');     // 局内商城（进入即暂停）
 }
 
 const PAUSE_BTN = { x: W - 50, y: 10, w: 38, h: 38 };
+const GAME_SHOP_BTN = { x: W - 94, y: 10, w: 38, h: 38 };
 function drawPauseBtn() {
   iconBtn('pause', PAUSE_BTN, state === 'paused' ? 0 : 7, state === 'paused' ? 'hover' : 'blue');
 }
@@ -1040,17 +1083,20 @@ function handleUI(dt) {
       if (code === 'Digit1') { meta.difficulty = 'easy'; saveMeta(); }
       else if (code === 'Digit2') { meta.difficulty = 'normal'; saveMeta(); }
       else if (code === 'Digit3') { meta.difficulty = 'hard'; saveMeta(); }
-      else if (code === 'KeyB') state = 'shop';
+      else if (code === 'KeyB') { shopFrom = 'title'; state = 'shop'; }
       else if (code === 'Enter' || code === 'Space' || code === 'NumpadEnter') { uiPress('start'); startGame(); }
     } else if (state === 'shop') {
-      if (code === 'Escape' || code === 'KeyB') state = 'title';
+      if (code === 'Escape' || code === 'KeyB') state = shopFrom === 'game' ? 'paused' : shopFrom === 'gameover' ? 'gameover' : 'title';
       else if (code === 'Digit1') shopTab = 'weapon';
       else if (code === 'Digit2') shopTab = 'equip';
       else if (code === 'Digit3') shopTab = 'pet';
       else if (code === 'Digit4') shopTab = 'merc';
     } else if (state === 'gameover') {
       if (code === 'KeyR') { uiPress('restart'); startGame(); }
-      else if (code === 'KeyB') state = 'shop';
+      else if (code === 'KeyB') { shopFrom = 'gameover'; state = 'shop'; }
+    } else if (code === 'KeyB' && (state === 'playing' || state === 'paused')) {
+      shopFrom = 'game';                 // 局内进商城：游戏逻辑自动暂停
+      state = 'shop';
     } else if (code === 'KeyP' && (state === 'playing' || state === 'paused')) {
       state = state === 'playing' ? 'paused' : 'playing';
     }
@@ -1062,9 +1108,12 @@ function handleUI(dt) {
         if (inRect(p, DIFF_BTNS[i])) { meta.difficulty = DIFF_BTNS[i].id; saveMeta(); uiPress('diff' + i); }
       }
       if (inRect(p, START_BTN)) { uiPress('start'); startGame(); }
-      else if (inRect(p, SHOP_BTN)) { uiPress('shop'); state = 'shop'; }
+      else if (inRect(p, SHOP_BTN)) { uiPress('shop'); shopFrom = 'title'; state = 'shop'; }
     } else if (state === 'shop') {
-      if (inRect(p, SHOP_BACK)) { uiPress('back'); state = 'title'; }
+      if (inRect(p, SHOP_BACK)) {
+        uiPress('back');
+        state = shopFrom === 'game' ? 'paused' : shopFrom === 'gameover' ? 'gameover' : 'title';
+      }
       let tabX = 60;
       for (const tab of SHOP_TABS) {
         if (inRect(p, { x: tabX, y: 78, w: 165, h: 54 })) shopTab = tab.id;
@@ -1074,14 +1123,21 @@ function handleUI(dt) {
         if (inRect(p, r)) {
           uiPress('row_' + r.kind + '_' + r.id);
           shopAction(r.kind, r.id);
+          if (shopFrom === 'game') applyLoadout();   // 局内购买立即生效
         }
       }
     } else if (state === 'gameover') {
       if (inRect(p, RESTART_BTN)) { uiPress('restart'); startGame(); }
-      else if (inRect(p, GO_SHOP_BTN)) { uiPress('goshop'); state = 'shop'; }
-    } else if ((state === 'playing' || state === 'paused') && input.touchSeen && inRect(p, PAUSE_BTN)) {
-      uiPress('pause');
-      state = state === 'playing' ? 'paused' : 'playing';
+      else if (inRect(p, GO_SHOP_BTN)) { uiPress('goshop'); shopFrom = 'gameover'; state = 'shop'; }
+    } else if (state === 'playing' || state === 'paused') {
+      if (inRect(p, GAME_SHOP_BTN)) {
+        uiPress('gameShop');
+        shopFrom = 'game';
+        state = 'shop';
+      } else if (inRect(p, PAUSE_BTN)) {
+        uiPress('pause');
+        state = state === 'playing' ? 'paused' : 'playing';
+      }
     }
   }
 }
