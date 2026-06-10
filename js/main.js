@@ -25,6 +25,7 @@ resize();
 let state = 'title';
 let player, bullets, monsters, eprojs, pets, petProjs, effects, floaters;
 let playTime, kills, runCoins, spawnTimer, stats, worldT = 0;
+let boss = null, bossIdx = 0, nextBossT = Infinity;
 let shopTab = 'weapon';
 let shopFrom = 'title';      // 商城来源：title / game / gameover（决定返回去向）
 let lastTap = null;
@@ -60,6 +61,7 @@ function reset() {
   kills = 0;
   runCoins = 0;
   spawnTimer = 0.5;
+  boss = null; bossIdx = 0; nextBossT = CONFIG.bossSchedule.firstAt;
   unitsReset();
   updateCam();
 }
@@ -124,6 +126,28 @@ function spawnMonster(s) {
   }
 }
 
+function spawnBoss() {
+  const sch = CONFIG.bossSchedule;
+  const type = sch.order[bossIdx % sch.order.length];
+  bossIdx++;
+  const cfg = CONFIG.monsters[type];
+  let x = player.x, y = player.y - 560;
+  for (let k = 0; k < 16; k++) {
+    const a = Math.random() * Math.PI * 2, dist = 520 + Math.random() * 120;
+    const px = player.x + Math.cos(a) * dist, py = player.y + Math.sin(a) * dist;
+    if (MAPGEN.walkable(px, py)) { x = px; y = py; break; }
+  }
+  const m = makeMonster(type, x, y);
+  const scale = 1 + Math.floor(playTime / 120) * sch.hpScalePer2min;
+  m.maxHp = m.hp = Math.round(cfg.hp * diff().hpMul * scale);
+  m.summonCd = cfg.summon ? cfg.summon.gap : 0;
+  m.enterT = 0;
+  boss = m;
+  monsters.push(m);
+  addFloater(player.x, player.y - 130, '⚠ ' + cfg.bossName + ' 出现！', '#FF6B6B', 2.6);
+  if (window.AUDIO) AUDIO.kill(m);   // 低吼提示
+}
+
 function spawnCampGoblins(camp) {
   camp.units = [];
   const types = ['torchGob', 'torchGob', 'torchGob', 'tntGob', 'barrelGob'];
@@ -184,6 +208,11 @@ function onKill(m) {
   addFloater(m.x, m.y - 40, `+${gain}`, '#FAC775');
   dropFrom(m);
   if (cfg.explodes) spawnExplosion(m.x, m.y);
+  if (cfg.boss) {
+    boss = null;
+    nextBossT = playTime + CONFIG.bossSchedule.gap;
+    addFloater(m.x, m.y - 110, cfg.bossName + ' 被击败！', '#FFD27A', 3.2);
+  }
 }
 
 // 局内购物立即生效：武器/装备换算属性（血量上限提升的部分直接补上）、精灵换人、佣兵入场/升级
@@ -404,6 +433,27 @@ function update(dt) {
     if (Math.floor(e.animT * cfg.fps) >= cfg.frames) effects.splice(i, 1);
   }
 
+  // Boss 触发 + 召唤
+  if (!boss && playTime >= nextBossT) spawnBoss();
+  if (boss) {
+    if (boss.dying || !monsters.includes(boss)) boss = null;
+    else {
+      const bc = CONFIG.monsters[boss.type];
+      if (bc.summon) {
+        boss.summonCd -= dt;
+        if (boss.summonCd <= 0) {
+          boss.summonCd = bc.summon.gap;
+          for (let k = 0; k < bc.summon.count; k++) {
+            const a = Math.random() * Math.PI * 2, dd = 70 + Math.random() * 50;
+            const sx = boss.x + Math.cos(a) * dd, sy = boss.y + Math.sin(a) * dd;
+            if (MAPGEN.walkable(sx, sy)) monsters.push(makeMonster(bc.summon.type, sx, sy));
+          }
+          addFloater(boss.x, boss.y - 90, '召唤小弟！', '#FFB0B0', 1.2);
+        }
+      }
+    }
+  }
+
   // 刷怪 + 远端清理
   const s = stage();
   spawnTimer -= dt;
@@ -429,7 +479,7 @@ function update(dt) {
     }
     const dx = player.x - m.x, dy = player.y - m.y;
     const d = Math.hypot(dx, dy) || 1;
-    if (d > 1500) { monsters.splice(i, 1); continue; }   // 被甩远的怪直接回收
+    if (d > 1500 && !cfg.boss) { monsters.splice(i, 1); continue; }   // 被甩远的怪直接回收（Boss 不回收）
     m.atkCd -= dt;
 
     if (m.state === 'hit') {
@@ -456,7 +506,11 @@ function update(dt) {
           }
         } else {
           const p = cfg.projectile;
-          eprojs.push({ type: m.type, x: m.x, y: m.y - 10, vx: dx / d * p.speed, vy: dy / d * p.speed, animT: 0 });
+          const n = cfg.barrage || 1, baseA = Math.atan2(dy, dx);
+          for (let j = 0; j < n; j++) {
+            const a = baseA + (n > 1 ? (j / (n - 1) - 0.5) * 0.7 : 0);
+            eprojs.push({ type: m.type, x: m.x, y: m.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, animT: 0 });
+          }
         }
       }
       if (frame >= a.frames) { m.state = 'move'; m.animT = 0; m.atkCd = cfg.attackCooldown; }
@@ -644,7 +698,9 @@ function drawMonster(m) {
   if (!m.dying) shadow(m.x, m.y + 12, cfg.radius + 6);
   ctx.translate(m.x, m.y - cfg.bodyOffsetY * cfg.scale);
   if (m.flip) ctx.scale(-1, 1);
-  if (m.slowT > 0) ctx.filter = 'saturate(0.4) brightness(1.25)';
+  let _flt = cfg.tint ? cfg.tint : '';
+  if (m.slowT > 0) _flt += ' saturate(0.4) brightness(1.25)';
+  if (_flt) ctx.filter = _flt.trim();
   const img = cfg.tierSheets ? images[m.type].tiers[m.tier] : images[m.type][key];
   const row = cfg.tierSheets ? a.row : 0;
   ctx.drawImage(img, f * fw, row * fw, fw, fw, -size / 2, -size / 2, size, size);
@@ -813,6 +869,19 @@ function drawHUD() {
 
   drawPauseBtn();
   iconBtn('gameShop', GAME_SHOP_BTN, 6, 'blue');     // 局内商城（进入即暂停）
+  drawBossBar();
+}
+
+function drawBossBar() {
+  if (!boss || boss.dying || !monsters.includes(boss)) return;
+  const cfg = CONFIG.monsters[boss.type];
+  const bw = 380, bx = W / 2 - bw / 2, by = 66;
+  ctx.fillStyle = 'rgba(10,8,16,0.55)'; ctx.fillRect(bx - 8, by - 22, bw + 16, 44);
+  ctx.fillStyle = '#FFE0A0'; ctx.font = 'bold 15px -apple-system, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('☠ ' + cfg.bossName, W / 2, by - 6);
+  ctx.fillStyle = '#2a0e16'; ctx.fillRect(bx, by, bw, 14);
+  ctx.fillStyle = '#e23b4e'; ctx.fillRect(bx, by, bw * Math.max(0, boss.hp) / boss.maxHp, 14);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 14);
 }
 
 const PAUSE_BTN = { x: W - 50, y: 10, w: 38, h: 38 };
@@ -1179,13 +1248,20 @@ function draw() {
 }
 
 // ---------- UI 事件路由 ----------
-function startGame() { state = 'playing'; reset(); if (window.AUDIO) { AUDIO.unlock(); AUDIO.startBGM(); } }
+let _bgmWant = '';
+function syncBgm() {                              // BGM 跟随场景：战斗用高能曲，标题/商城用舒缓曲
+  if (!window.AUDIO) return;
+  const want = (state === 'playing' || state === 'paused') ? 'battle' : 'menu';
+  if (want !== _bgmWant) { _bgmWant = want; AUDIO.startBGM(want); }
+}
+function startGame() { state = 'playing'; reset(); if (window.AUDIO) AUDIO.unlock(); }
 
 function handleUI(dt) {
   uiTick(dt);
   if (lastTap) lastTap.t += dt;
   for (const code of input.keyPresses) {
     if (code === 'KeyM') { if (window.AUDIO) AUDIO.toggleMute(); continue; }
+    if (code === 'KeyG' && state === 'playing') { nextBossT = 0; continue; }   // 调试：立即召唤 Boss
     if (state === 'title') {
       if (code === 'Digit1') { meta.difficulty = 'easy'; saveMeta(); }
       else if (code === 'Digit2') { meta.difficulty = 'hard'; saveMeta(); }
@@ -1268,6 +1344,7 @@ function loop(now) {
     handleUI(dt);
     if (state === 'playing') update(dt);
     draw();
+    syncBgm();
   } catch (e) {
     if (lastError !== e.message) { lastError = e.message; console.error(e); }
     ctx.setTransform(viewScale, 0, 0, viewScale, 0, 0);

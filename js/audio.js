@@ -19,11 +19,10 @@ const AUDIO = (() => {
     master.connect(ctx.destination);
   }
 
-  // 首次用户手势调用：创建并恢复 AudioContext，并起 BGM（全程循环）
+  // 首次用户手势调用：创建并恢复 AudioContext（BGM 由 syncBgm 按场景启动）
   function unlock() {
     ensure();
     if (ctx && ctx.state === 'suspended') ctx.resume();
-    startBGM();
   }
 
   // 带包络的振荡器(可扫频)
@@ -103,78 +102,153 @@ const AUDIO = (() => {
     tone({ freq: 330, to: 80, type: 'triangle', dur: 0.5, vol: 0.05, delay: 0.06 });
   }
 
-  // ---- BGM：舒缓抒情循环（柔和 sine 和弦铺底 + 三角波琶音 + 留白主旋律，无硬鼓点）----
-  const PROG = [
-    // 段 A
-    { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
-    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
-    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
-    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
-    // 段 B
-    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
-    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
-    { bass: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, // Em7
-    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
-    // 段 C
-    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
-    { bass: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, // Em7
-    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
-    { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
-    // 段 D
-    { bass: 73.42, pad: [146.8, 174.6, 220.0, 261.6] }, // Dm7
-    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
-    { bass: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, // Em7
-    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
-    // 段 E
-    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
-    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
-    { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
-    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
+  // ---- BGM：高能驱动战斗曲（140 BPM · 鼓组 + 律动 bass + synth 主旋律 · 4 段）----
+  const CHORDS = [
+    // 段 A（主题，建立律动）
+    { root: 110.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 87.31, notes: [174.6, 220.0, 261.6] }, // F
+    { root: 130.8, notes: [196.0, 261.6, 329.6] }, // C
+    { root: 98.00, notes: [196.0, 246.9, 293.7] }, // G
+    // 段 B（上扬）
+    { root: 110.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 98.00, notes: [196.0, 246.9, 293.7] }, // G
+    { root: 87.31, notes: [174.6, 220.0, 261.6] }, // F
+    { root: 98.00, notes: [196.0, 246.9, 293.7] }, // G
+    // 段 C（副歌 / 高潮）
+    { root: 87.31, notes: [174.6, 220.0, 261.6] }, // F
+    { root: 130.8, notes: [196.0, 261.6, 329.6] }, // C
+    { root: 98.00, notes: [196.0, 246.9, 293.7] }, // G
+    { root: 110.0, notes: [220.0, 261.6, 329.6] }, // Am
+    // 段 D（bridge，紧张转折）
+    { root: 73.42, notes: [146.8, 174.6, 220.0] }, // Dm
+    { root: 82.41, notes: [164.8, 207.7, 246.9] }, // E
+    { root: 110.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 98.00, notes: [196.0, 246.9, 293.7] }, // G
   ];
-  // 160 步主旋律：5 段乐句（A 明亮 / B 上扬 / C 温柔 / D 转折 / E 收束），每段 4 小节
+  // 128 步主旋律：4 段（A 主题 / B 上扬 / C 副歌高潮 / D 转折），每段 4 小节
   const MEL = [
     // A
+    659.3, 0, 587.3, 0, 523.3, 0, 587.3, 0, 659.3, 0, 0, 587.3, 523.3, 0, 440.0, 0,
+    523.3, 0, 587.3, 0, 659.3, 0, 698.5, 0, 587.3, 0, 0, 0, 523.3, 0, 493.9, 0,
+    // B
+    659.3, 0, 659.3, 0, 587.3, 0, 659.3, 0, 698.5, 0, 659.3, 0, 587.3, 0, 523.3, 0,
+    587.3, 0, 587.3, 0, 523.3, 0, 587.3, 0, 659.3, 0, 0, 0, 587.3, 0, 659.3, 0,
+    // C（高潮，高音区）
+    880.0, 0, 0, 784.0, 0, 880.0, 0, 0, 1046.5, 0, 880.0, 0, 784.0, 0, 698.5, 0,
+    659.3, 0, 784.0, 0, 880.0, 0, 784.0, 0, 698.5, 0, 659.3, 0, 587.3, 0, 0, 0,
+    // D（转折）
+    587.3, 0, 698.5, 0, 659.3, 0, 587.3, 0, 523.3, 0, 0, 659.3, 587.3, 0, 0, 0,
+    493.9, 0, 587.3, 0, 659.3, 0, 587.3, 0, 659.3, 0, 698.5, 0, 784.0, 0, 880.0, 0,
+  ];
+  const B_STEP = 60 / 140 / 2; // 战斗曲八分音符
+  const M_STEP = 60 / 100 / 2; // 菜单曲八分音符
+  let curKind = 'battle';
+  // 菜单舒缓曲数据（柔和 sine 铺底 + 三角波琶音 + 留白旋律，5 段）
+  const M_CHORDS = [
+    { root: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, { root: 98.00, pad: [196.0, 246.9, 293.7, 392.0] },
+    { root: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, { root: 87.31, pad: [174.6, 220.0, 261.6, 329.6] },
+    { root: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, { root: 98.00, pad: [196.0, 246.9, 293.7, 392.0] },
+    { root: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, { root: 110.0, pad: [220.0, 261.6, 329.6, 392.0] },
+    { root: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, { root: 82.41, pad: [164.8, 196.0, 246.9, 293.7] },
+    { root: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, { root: 130.8, pad: [261.6, 329.6, 392.0, 493.9] },
+    { root: 73.42, pad: [146.8, 174.6, 220.0, 261.6] }, { root: 98.00, pad: [196.0, 246.9, 293.7, 392.0] },
+    { root: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, { root: 110.0, pad: [220.0, 261.6, 329.6, 392.0] },
+    { root: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, { root: 98.00, pad: [196.0, 246.9, 293.7, 392.0] },
+    { root: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, { root: 98.00, pad: [196.0, 246.9, 293.7, 392.0] },
+  ];
+  const M_MEL = [
     523.3, 0, 0, 587.3, 0, 659.3, 0, 0, 784.0, 0, 0, 0, 659.3, 0, 587.3, 0,
     523.3, 0, 0, 493.9, 0, 440.0, 0, 0, 392.0, 0, 0, 0, 440.0, 0, 493.9, 0,
-    // B
     587.3, 0, 0, 659.3, 0, 698.5, 0, 0, 880.0, 0, 0, 0, 784.0, 0, 659.3, 0,
     659.3, 0, 0, 587.3, 0, 523.3, 0, 0, 493.9, 0, 0, 0, 440.0, 0, 392.0, 0,
-    // C
     440.0, 0, 0, 392.0, 0, 329.6, 0, 0, 349.2, 0, 392.0, 0, 440.0, 0, 0, 0,
     392.0, 0, 0, 349.2, 0, 329.6, 0, 0, 293.7, 0, 0, 0, 329.6, 0, 392.0, 0,
-    // D
     587.3, 0, 0, 523.3, 0, 587.3, 0, 0, 659.3, 0, 587.3, 0, 523.3, 0, 0, 0,
     493.9, 0, 0, 440.0, 0, 493.9, 0, 0, 523.3, 0, 0, 0, 587.3, 0, 659.3, 0,
-    // E
     698.5, 0, 0, 659.3, 0, 587.3, 0, 0, 523.3, 0, 0, 0, 493.9, 0, 440.0, 0,
     392.0, 0, 0, 440.0, 0, 493.9, 0, 0, 523.3, 0, 0, 0, 523.3, 0, 0, 0,
   ];
-  const BPM = 100;
-  const STEP = 60 / BPM / 2; // 八分音符
 
-  // 柔和铺底和弦（长音、慢起音）
-  function pad(freqs, at) {
-    for (const f of freqs) tone({ freq: f, type: 'sine', dur: STEP * 7.6, vol: 0.026, delay: at - ctx.currentTime, attack: 0.14 });
+  function kick(at, vol) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, at);
+    o.frequency.exponentialRampToValueAtTime(50, at + 0.1);
+    g.gain.setValueAtTime(vol, at);
+    g.gain.exponentialRampToValueAtTime(0.0008, at + 0.13);
+    o.connect(g); g.connect(master);
+    o.start(at); o.stop(at + 0.15);
+  }
+  function snare(at) {
+    const n = Math.floor(ctx.sampleRate * 0.13);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = ctx.createBufferSource(); s.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.085, at); g.gain.exponentialRampToValueAtTime(0.0008, at + 0.13);
+    s.connect(bp); bp.connect(g); g.connect(master);
+    s.start(at); s.stop(at + 0.14);
+  }
+  function hat(at, open) {
+    const dur = open ? 0.07 : 0.028;
+    const n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = ctx.createBufferSource(); s.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 8500;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(open ? 0.02 : 0.028, at); g.gain.exponentialRampToValueAtTime(0.0006, at + dur);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(at); s.stop(at + dur + 0.01);
   }
 
   function schedule() {
     if (!ctx) return;
+    if (curKind === 'menu') scheduleMenu(); else scheduleBattle();
+  }
+  function scheduleBattle() {
+    while (bgmNextT < ctx.currentTime + 0.25) {
+      const step = bgmStep % 128;
+      const dly = bgmNextT - ctx.currentTime;
+      const t = bgmNextT;
+      const ch = CHORDS[Math.floor(step / 8) % 16];
+      const chorus = Math.floor(step / 32) % 4 === 2;                       // 副歌段（C）加密鼓点
+      if (step % 4 === 0) kick(t, 0.15);                                    // 每拍底鼓
+      if (chorus && step % 4 === 2) kick(t, 0.10);
+      if (step % 8 === 4) snare(t);                                         // 反拍军鼓
+      hat(t, step % 4 === 2);                                              // 每八分踩镲（反拍 open）
+      const bf = (step % 4 === 2) ? ch.root * 1.5 : (step % 2 === 0 ? ch.root : ch.root * 2); // 律动 bassline
+      tone({ freq: bf, type: 'sawtooth', dur: B_STEP * 0.85, vol: 0.06, delay: dly, attack: 0.004 });
+      tone({ freq: ch.notes[step % ch.notes.length] * 2, type: 'square', dur: B_STEP * 0.45, vol: 0.016, delay: dly, attack: 0.004 }); // 快速琶音垫
+      const m = MEL[step];
+      if (m) tone({ freq: m, type: 'square', dur: B_STEP * 1.25, vol: 0.07, delay: dly, attack: 0.005 });                            // synth 主旋律
+      bgmStep++; bgmNextT += B_STEP;
+    }
+  }
+  function scheduleMenu() {
     while (bgmNextT < ctx.currentTime + 0.25) {
       const step = bgmStep % 160;
       const dly = bgmNextT - ctx.currentTime;
-      const ch = PROG[Math.floor(step / 8) % 20];
-      if (step % 8 === 0) pad(ch.pad, bgmNextT);                                                                            // 每小节铺一层柔和和弦
-      if (step % 4 === 0) tone({ freq: ch.bass, type: 'triangle', dur: STEP * 3.4, vol: 0.055, delay: dly, attack: 0.03 }); // 柔和低音
-      if (step % 2 === 0) tone({ freq: ch.pad[Math.floor(step / 2) % ch.pad.length], type: 'triangle', dur: STEP * 1.5, vol: 0.026, delay: dly, attack: 0.02 }); // 轻琶音
-      const m = MEL[step];
-      if (m) tone({ freq: m, type: 'triangle', dur: STEP * 1.9, vol: 0.056, delay: dly, attack: 0.035 });                  // 抒情主旋律
-      bgmStep++; bgmNextT += STEP;
+      const ch = M_CHORDS[Math.floor(step / 8) % 20];
+      if (step % 8 === 0) for (const f of ch.pad) tone({ freq: f, type: 'sine', dur: M_STEP * 7.6, vol: 0.026, delay: dly, attack: 0.14 });
+      if (step % 4 === 0) tone({ freq: ch.root, type: 'triangle', dur: M_STEP * 3.4, vol: 0.055, delay: dly, attack: 0.03 });
+      if (step % 2 === 0) tone({ freq: ch.pad[Math.floor(step / 2) % ch.pad.length], type: 'triangle', dur: M_STEP * 1.5, vol: 0.026, delay: dly, attack: 0.02 });
+      const m = M_MEL[step];
+      if (m) tone({ freq: m, type: 'triangle', dur: M_STEP * 1.9, vol: 0.056, delay: dly, attack: 0.035 });
+      bgmStep++; bgmNextT += M_STEP;
     }
   }
 
-  function startBGM() {
+  function startBGM(kind) {
     ensure();
-    if (!ctx || bgmTimer) return;
+    if (!ctx) return;
+    kind = kind || curKind;
+    if (bgmTimer && kind === curKind) return;       // 已在播同一曲
+    if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+    curKind = kind;
     bgmStep = 0;
     bgmNextT = ctx.currentTime + 0.08;
     bgmTimer = setInterval(schedule, 40);

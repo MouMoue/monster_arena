@@ -212,6 +212,64 @@ const CONFIG = {
         attack: { row: 5, frames: 3, fps: 9 },   // 引爆抖动
       },
     },
+    // ===== Boss（现有素材放大 + 染色强化，存活满 2 分钟触发；boss:true 标志）=====
+    bossGoblin: {
+      boss: true, bossName: '哥布林王', tint: 'saturate(1.7) brightness(1.05) hue-rotate(-20deg)',
+      hp: 2200, speed: 95, damage: 26, radius: 52, coin: 120, xp: 220, kbMul: 0.12,
+      frame: 150, scale: 4.0, bodyOffsetY: 26, behavior: 'melee',
+      attackRange: 135, attackCooldown: 1.3, hitFrame: 5, attacks: ['attack', 'attack2'],
+      summon: { type: 'goblin', count: 3, gap: 7 },
+      anims: {
+        move:    { file: 'goblin/Run.png',     frames: 8, fps: 11 },
+        idle:    { file: 'goblin/Idle.png',    frames: 4, fps: 8 },
+        attack:  { file: 'goblin/Attack.png',  frames: 8, fps: 14 },
+        attack2: { file: 'goblin/Attack2.png', frames: 8, fps: 14 },
+        hit:     { file: 'goblin/TakeHit.png', frames: 4, fps: 14 },
+        death:   { file: 'goblin/Death.png',   frames: 4, fps: 9 },
+      },
+    },
+    bossEye: {
+      boss: true, bossName: '独眼魔王', tint: 'saturate(1.5) brightness(1.1) hue-rotate(210deg)',
+      hp: 1700, speed: 225, damage: 22, radius: 46, coin: 120, xp: 220, kbMul: 0.18,
+      frame: 150, scale: 3.6, bodyOffsetY: 34, behavior: 'melee',
+      attackRange: 110, attackCooldown: 0.85, hitFrame: 4, attacks: ['attack', 'attack2'],
+      anims: {
+        move:    { file: 'flying_eye/Flight.png',  frames: 8, fps: 14 },
+        attack:  { file: 'flying_eye/Attack.png',  frames: 8, fps: 16 },
+        attack2: { file: 'flying_eye/Attack2.png', frames: 8, fps: 16 },
+        hit:     { file: 'flying_eye/TakeHit.png', frames: 4, fps: 14 },
+        death:   { file: 'flying_eye/Death.png',   frames: 4, fps: 10 },
+      },
+    },
+    bossMushroom: {
+      boss: true, bossName: '孢子巨蕈', tint: 'saturate(1.7) brightness(1.05) hue-rotate(80deg)',
+      hp: 2000, speed: 70, damage: 18, radius: 50, coin: 130, xp: 240, kbMul: 0.14,
+      frame: 150, scale: 4.0, bodyOffsetY: 26, behavior: 'ranged',
+      attackRange: 470, attackCooldown: 1.5, hitFrame: 5, attacks: ['attack', 'attack2'], barrage: 5,
+      projectile: { file: 'mushroom/Projectile_sprite.png', frames: 8, fps: 12, size: 50, scale: 1.7, speed: 250, radius: 16 },
+      anims: {
+        move:    { file: 'mushroom/Run.png',     frames: 8, fps: 11 },
+        idle:    { file: 'mushroom/Idle.png',    frames: 4, fps: 8 },
+        attack:  { file: 'mushroom/Attack.png',  frames: 8, fps: 12 },
+        attack2: { file: 'mushroom/Attack2.png', frames: 8, fps: 12 },
+        hit:     { file: 'mushroom/TakeHit.png', frames: 4, fps: 14 },
+        death:   { file: 'mushroom/Death.png',   frames: 4, fps: 10 },
+      },
+    },
+    bossSkeleton: {
+      boss: true, bossName: '骷髅领主', tint: 'saturate(0.65) brightness(0.85) hue-rotate(170deg)',
+      hp: 3000, speed: 72, damage: 34, radius: 56, coin: 150, xp: 280, kbMul: 0.08,
+      frame: 150, scale: 4.3, bodyOffsetY: 26, behavior: 'melee',
+      attackRange: 160, attackCooldown: 1.5, hitFrame: 5, attacks: ['attack', 'attack2'], fireFx: true,
+      anims: {
+        move:    { file: 'skeleton/Walk.png',     frames: 4, fps: 8 },
+        idle:    { file: 'skeleton/Idle.png',     frames: 4, fps: 8 },
+        attack:  { file: 'skeleton/Attack.png',   frames: 8, fps: 13 },
+        attack2: { file: 'skeleton/Attack2.png',  frames: 8, fps: 13 },
+        hit:     { file: 'skeleton/TakeHit.png',  frames: 4, fps: 14 },
+        death:   { file: 'skeleton/Death.png',    frames: 4, fps: 9 },
+      },
+    },
   },
 
   // 哥布林梯队（颜色=强度），按局内时间解锁更高梯队
@@ -240,6 +298,9 @@ const CONFIG = {
     hard:      { name: '困难', spawnMul: 0.6, hpMul: 1.5, dmgMul: 1.5, coinMul: 1.6 },
     nightmare: { name: '噩梦', spawnMul: 0.45, hpMul: 2.2, dmgMul: 2.0, coinMul: 2.5 },
   },
+
+  // Boss：存活满 firstAt 秒触发第一个，之后每 gap 秒一个，按 order 轮换；hpScalePer2min 随时间增强
+  bossSchedule: { firstAt: 120, gap: 75, order: ['bossGoblin', 'bossEye', 'bossMushroom', 'bossSkeleton'], hpScalePer2min: 0.3 },
 
   xp: { base: 100, growth: 75 },
 
