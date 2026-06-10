@@ -1,6 +1,7 @@
 // 持枪火柴人程序化绘制 —— PRD 4.1
-// 姿态完全由参数驱动: aim 朝向(单位向量), moving, phase 走路相位, muzzle 枪口火光剩余秒数, invuln 无敌剩余秒数
-const GUN_TIP = 34; // 枪口距肩部距离，供 main 计算子弹出生点
+// 姿态完全由参数驱动: aim 朝向(单位向量), moving, phase 走路相位, muzzle 枪口火光剩余秒数,
+// invuln 无敌剩余秒数, weaponVisual {len,w} 当前武器的枪身尺寸
+function gunTip(visual) { return 15 + visual.len + 2; }  // 枪口距肩部距离，供 main 计算子弹出生点
 
 function drawStickman(ctx, x, y, o) {
   const C = CONFIG.colors;
@@ -48,20 +49,22 @@ function drawStickman(ctx, x, y, o) {
   ctx.moveTo(0, 0);
   ctx.lineTo(17, 0);
   ctx.stroke();
+  const v = o.weaponVisual || { len: 17, w: 6 };
+  const tip = gunTip(v);
   ctx.fillStyle = C.gun;
-  ctx.fillRect(15, -3, 17, 6);
-  ctx.fillRect(17, 3, 5, 8);
+  ctx.fillRect(15, -v.w / 2, v.len, v.w);
+  ctx.fillRect(17, v.w / 2, 5, 8);
   if (o.muzzle > 0) {
     ctx.fillStyle = C.muzzle;
     ctx.beginPath();
-    ctx.arc(GUN_TIP + 3, 0, 6, 0, Math.PI * 2);
+    ctx.arc(tip + 3, 0, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = C.muzzle;
     ctx.lineWidth = 2;
     for (const a of [-0.5, 0, 0.5]) {
       ctx.beginPath();
-      ctx.moveTo(GUN_TIP + 6, 0);
-      ctx.lineTo(GUN_TIP + 13 + 3 * Math.cos(a * 3), 9 * Math.sin(a));
+      ctx.moveTo(tip + 6, 0);
+      ctx.lineTo(tip + 13 + 3 * Math.cos(a * 3), 9 * Math.sin(a));
       ctx.stroke();
     }
   }
