@@ -22,11 +22,16 @@ const CONFIG = {
   },
 
   weapons: {
-    pistol:  { name: '手枪',   desc: '伤害25 · 射速4',        price: 0,    level: 1, damage: 25, fireRate: 4,  speed: 600, pellets: 1, spread: 0,    pierce: 0, bulletR: 4,   visual: { len: 17, w: 6 } },
-    smg:     { name: '冲锋枪', desc: '伤害12 · 射速10',       price: 450,  level: 2, damage: 12, fireRate: 10, speed: 650, pellets: 1, spread: 0.06, pierce: 0, bulletR: 3,   visual: { len: 22, w: 5 } },
-    shotgun: { name: '霰弹枪', desc: '5连珠散射 · 单发伤害12', price: 900,  level: 3, damage: 12, fireRate: 1.6, speed: 560, pellets: 5, spread: 0.42, pierce: 0, bulletR: 3.5, visual: { len: 24, w: 8 } },
-    rifle:   { name: '狙击步枪', desc: '伤害60 · 穿透2个敌人',  price: 1800,  level: 5, damage: 60, fireRate: 2,  speed: 900, pellets: 1, spread: 0,    pierce: 2, bulletR: 4.5, visual: { len: 30, w: 5 } },
-    minigun: { name: '加特林', desc: '伤害15 · 射速16',       price: 3600, level: 7, damage: 15, fireRate: 16, speed: 700, pellets: 1, spread: 0.12, pierce: 0, bulletR: 3.5, visual: { len: 30, w: 9 } },
+    pistol:  { name: '手枪',   desc: '伤害25 · 射速4',        price: 0,    level: 1,  damage: 25,  fireRate: 4,  speed: 600,  pellets: 1, spread: 0,    pierce: 0, bulletR: 4,   visual: { len: 17, w: 6 }, bullet: { shape: 'orb',    color: '#FFE45A', glow: '#FF9F27', r: 5 } },
+    smg:     { name: '冲锋枪', desc: '伤害12 · 射速10',       price: 450,  level: 2,  damage: 12,  fireRate: 10, speed: 650,  pellets: 1, spread: 0.06, pierce: 0, bulletR: 3,   visual: { len: 22, w: 5 }, bullet: { shape: 'orb',    color: '#9FE8FF', glow: '#3FA8E8', r: 4 } },
+    shotgun: { name: '霰弹枪', desc: '5连珠散射 · 单发伤害12', price: 900,  level: 3,  damage: 12,  fireRate: 1.6, speed: 560, pellets: 5, spread: 0.42, pierce: 0, bulletR: 3.5, visual: { len: 24, w: 8 }, bullet: { shape: 'orb',    color: '#FFC070', glow: '#E8602A', r: 4 } },
+    flame:   { name: '烈焰喷射器', desc: '近距火球 · 高频灼烧', price: 1500, level: 4,  damage: 9,   fireRate: 14, speed: 380,  pellets: 2, spread: 0.30, pierce: 1, bulletR: 6,   visual: { len: 22, w: 8 }, bullet: { shape: 'fire',   color: '#FFC040', glow: '#FF4810', r: 8 } },
+    rifle:   { name: '狙击步枪', desc: '伤害60 · 穿透2',        price: 1800, level: 5,  damage: 60,  fireRate: 2,  speed: 900,  pellets: 1, spread: 0,    pierce: 2, bulletR: 4.5, visual: { len: 30, w: 5 }, bullet: { shape: 'beam',   color: '#CFFFD8', glow: '#40D070', r: 5 } },
+    laser:   { name: '激光枪', desc: '高速激光 · 穿透1',       price: 2400, level: 6,  damage: 30,  fireRate: 6,  speed: 1100, pellets: 1, spread: 0,    pierce: 1, bulletR: 4,   visual: { len: 28, w: 4 }, bullet: { shape: 'beam',   color: '#A8FFFF', glow: '#20C8E8', r: 5 } },
+    plasma:  { name: '等离子炮', desc: '高伤能量球 · 穿透1',    price: 3000, level: 7,  damage: 55,  fireRate: 2.4, speed: 520, pellets: 1, spread: 0,    pierce: 1, bulletR: 8,   visual: { len: 26, w: 9 }, bullet: { shape: 'energy', color: '#E89CFF', glow: '#9020E0', r: 11 } },
+    minigun: { name: '加特林', desc: '伤害15 · 射速16',       price: 3600, level: 8,  damage: 15,  fireRate: 16, speed: 700,  pellets: 1, spread: 0.12, pierce: 0, bulletR: 3.5, visual: { len: 30, w: 9 }, bullet: { shape: 'orb',    color: '#FFD060', glow: '#E8A020', r: 4 } },
+    tesla:   { name: '电磁枪', desc: '电弧弹 · 中伤连射',       price: 4000, level: 9,  damage: 22,  fireRate: 7,  speed: 800,  pellets: 1, spread: 0.05, pierce: 1, bulletR: 4,   visual: { len: 24, w: 6 }, bullet: { shape: 'bolt',   color: '#FFF070', glow: '#E0B020', r: 5 } },
+    railgun: { name: '磁轨炮', desc: '超高伤 · 穿透3',          price: 5500, level: 10, damage: 130, fireRate: 1.1, speed: 1400, pellets: 1, spread: 0,   pierce: 3, bulletR: 5,   visual: { len: 34, w: 5 }, bullet: { shape: 'beam',   color: '#D8E8FF', glow: '#4060FF', r: 6 } },
   },
 
   equipment: {
@@ -216,7 +221,7 @@ const CONFIG = {
     bossGoblin: {
       boss: true, bossName: '哥布林王', tint: 'saturate(1.7) brightness(1.05) hue-rotate(-20deg)',
       hp: 2200, speed: 95, damage: 26, radius: 52, coin: 120, xp: 220, kbMul: 0.12,
-      frame: 150, scale: 4.0, bodyOffsetY: 26, behavior: 'melee',
+      frame: 150, scale: 2.9, bodyOffsetY: 26, behavior: 'melee',
       attackRange: 135, attackCooldown: 1.3, hitFrame: 5, attacks: ['attack', 'attack2'],
       summon: { type: 'goblin', count: 3, gap: 7 },
       anims: {
@@ -231,7 +236,7 @@ const CONFIG = {
     bossEye: {
       boss: true, bossName: '独眼魔王', tint: 'saturate(1.5) brightness(1.1) hue-rotate(210deg)',
       hp: 1700, speed: 225, damage: 22, radius: 46, coin: 120, xp: 220, kbMul: 0.18,
-      frame: 150, scale: 3.6, bodyOffsetY: 34, behavior: 'melee',
+      frame: 150, scale: 2.7, bodyOffsetY: 34, behavior: 'melee',
       attackRange: 110, attackCooldown: 0.85, hitFrame: 4, attacks: ['attack', 'attack2'],
       anims: {
         move:    { file: 'flying_eye/Flight.png',  frames: 8, fps: 14 },
@@ -244,7 +249,7 @@ const CONFIG = {
     bossMushroom: {
       boss: true, bossName: '孢子巨蕈', tint: 'saturate(1.7) brightness(1.05) hue-rotate(80deg)',
       hp: 2000, speed: 70, damage: 18, radius: 50, coin: 130, xp: 240, kbMul: 0.14,
-      frame: 150, scale: 4.0, bodyOffsetY: 26, behavior: 'ranged',
+      frame: 150, scale: 2.9, bodyOffsetY: 26, behavior: 'ranged',
       attackRange: 470, attackCooldown: 1.5, hitFrame: 5, attacks: ['attack', 'attack2'], barrage: 5,
       projectile: { file: 'mushroom/Projectile_sprite.png', frames: 8, fps: 12, size: 50, scale: 1.7, speed: 250, radius: 16 },
       anims: {
@@ -259,7 +264,7 @@ const CONFIG = {
     bossSkeleton: {
       boss: true, bossName: '骷髅领主', tint: 'saturate(0.65) brightness(0.85) hue-rotate(170deg)',
       hp: 3000, speed: 72, damage: 34, radius: 56, coin: 150, xp: 280, kbMul: 0.08,
-      frame: 150, scale: 4.3, bodyOffsetY: 26, behavior: 'melee',
+      frame: 150, scale: 3.1, bodyOffsetY: 26, behavior: 'melee',
       attackRange: 160, attackCooldown: 1.5, hitFrame: 5, attacks: ['attack', 'attack2'], fireFx: true,
       anims: {
         move:    { file: 'skeleton/Walk.png',     frames: 4, fps: 8 },

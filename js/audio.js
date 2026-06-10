@@ -168,6 +168,24 @@ const AUDIO = (() => {
     698.5, 0, 0, 659.3, 0, 587.3, 0, 0, 523.3, 0, 0, 0, 493.9, 0, 440.0, 0,
     392.0, 0, 0, 440.0, 0, 493.9, 0, 0, 523.3, 0, 0, 0, 523.3, 0, 0, 0,
   ];
+  // Boss 专属曲（152 BPM，更紧张：密鼓 + 锯齿 lead + 小调/半音和弦，8 段循环）
+  const BOSS_STEP = 60 / 152 / 2;
+  const BOSS_CHORDS = [
+    { root: 110.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 73.42, notes: [146.8, 174.6, 220.0] }, // Dm
+    { root: 82.41, notes: [164.8, 207.7, 246.9] }, // E
+    { root: 110.0, notes: [220.0, 261.6, 329.6] }, // Am
+    { root: 87.31, notes: [174.6, 220.0, 261.6] }, // F
+    { root: 73.42, notes: [146.8, 174.6, 220.0] }, // Dm
+    { root: 82.41, notes: [164.8, 207.7, 246.9] }, // E
+    { root: 82.41, notes: [164.8, 207.7, 246.9] }, // E（停留蓄力）
+  ];
+  const BOSS_MEL = [
+    440.0, 0, 523.3, 0, 440.0, 0, 329.6, 0, 440.0, 0, 523.3, 0, 587.3, 0, 523.3, 0,
+    440.0, 0, 392.0, 0, 349.2, 0, 329.6, 0, 293.7, 0, 329.6, 0, 349.2, 0, 0, 0,
+    440.0, 0, 523.3, 0, 659.3, 0, 523.3, 0, 587.3, 0, 659.3, 0, 698.5, 0, 587.3, 0,
+    523.3, 0, 493.9, 0, 440.0, 0, 415.3, 0, 329.6, 0, 0, 0, 415.3, 0, 440.0, 0,
+  ];
 
   function kick(at, vol) {
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -207,7 +225,9 @@ const AUDIO = (() => {
 
   function schedule() {
     if (!ctx) return;
-    if (curKind === 'menu') scheduleMenu(); else scheduleBattle();
+    if (curKind === 'menu') scheduleMenu();
+    else if (curKind === 'boss') scheduleBoss();
+    else scheduleBattle();
   }
   function scheduleBattle() {
     while (bgmNextT < ctx.currentTime + 0.25) {
@@ -233,12 +253,29 @@ const AUDIO = (() => {
       const step = bgmStep % 160;
       const dly = bgmNextT - ctx.currentTime;
       const ch = M_CHORDS[Math.floor(step / 8) % 20];
-      if (step % 8 === 0) for (const f of ch.pad) tone({ freq: f, type: 'sine', dur: M_STEP * 7.6, vol: 0.026, delay: dly, attack: 0.14 });
-      if (step % 4 === 0) tone({ freq: ch.root, type: 'triangle', dur: M_STEP * 3.4, vol: 0.055, delay: dly, attack: 0.03 });
-      if (step % 2 === 0) tone({ freq: ch.pad[Math.floor(step / 2) % ch.pad.length], type: 'triangle', dur: M_STEP * 1.5, vol: 0.026, delay: dly, attack: 0.02 });
+      if (step % 8 === 0) for (const f of ch.pad) tone({ freq: f, type: 'sine', dur: M_STEP * 7.6, vol: 0.044, delay: dly, attack: 0.14 });
+      if (step % 4 === 0) tone({ freq: ch.root, type: 'triangle', dur: M_STEP * 3.4, vol: 0.09, delay: dly, attack: 0.03 });
+      if (step % 2 === 0) tone({ freq: ch.pad[Math.floor(step / 2) % ch.pad.length], type: 'triangle', dur: M_STEP * 1.5, vol: 0.044, delay: dly, attack: 0.02 });
       const m = M_MEL[step];
-      if (m) tone({ freq: m, type: 'triangle', dur: M_STEP * 1.9, vol: 0.056, delay: dly, attack: 0.035 });
+      if (m) tone({ freq: m, type: 'triangle', dur: M_STEP * 1.9, vol: 0.095, delay: dly, attack: 0.035 });
       bgmStep++; bgmNextT += M_STEP;
+    }
+  }
+  function scheduleBoss() {
+    while (bgmNextT < ctx.currentTime + 0.25) {
+      const step = bgmStep % 64;
+      const dly = bgmNextT - ctx.currentTime;
+      const t = bgmNextT;
+      const ch = BOSS_CHORDS[Math.floor(step / 8) % 8];
+      if (step % 2 === 0) kick(t, 0.15);                  // 八分底鼓（更密更紧张）
+      if (step % 8 === 4) snare(t);
+      hat(t, step % 8 === 6);
+      const bf = (step % 2 === 0) ? ch.root : ch.root * 2;
+      tone({ freq: bf, type: 'sawtooth', dur: BOSS_STEP * 0.8, vol: 0.065, delay: dly, attack: 0.003 });
+      tone({ freq: ch.notes[step % ch.notes.length] * 2, type: 'square', dur: BOSS_STEP * 0.4, vol: 0.018, delay: dly, attack: 0.003 });
+      const m = BOSS_MEL[step];
+      if (m) tone({ freq: m, type: 'sawtooth', dur: BOSS_STEP * 1.1, vol: 0.07, delay: dly, attack: 0.004 });
+      bgmStep++; bgmNextT += BOSS_STEP;
     }
   }
 

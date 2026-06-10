@@ -25,7 +25,7 @@ resize();
 let state = 'title';
 let player, bullets, monsters, eprojs, pets, petProjs, effects, floaters;
 let playTime, kills, runCoins, spawnTimer, stats, worldT = 0;
-let boss = null, bossIdx = 0, nextBossT = Infinity;
+let boss = null, bossIdx = 0, nextBossT = Infinity, fxList = [];
 let shopTab = 'weapon';
 let shopFrom = 'title';      // 商城来源：title / game / gameover（决定返回去向）
 let lastTap = null;
@@ -61,7 +61,7 @@ function reset() {
   kills = 0;
   runCoins = 0;
   spawnTimer = 0.5;
-  boss = null; bossIdx = 0; nextBossT = CONFIG.bossSchedule.firstAt;
+  boss = null; bossIdx = 0; nextBossT = CONFIG.bossSchedule.firstAt; fxList = [];
   unitsReset();
   updateCam();
 }
@@ -146,6 +146,96 @@ function spawnBoss() {
   monsters.push(m);
   addFloater(player.x, player.y - 130, '⚠ ' + cfg.bossName + ' 出现！', '#FF6B6B', 2.6);
   if (window.AUDIO) AUDIO.kill(m);   // 低吼提示
+}
+
+// ---------- 程序化特效（Boss 攻击）：冲击波 / 范围预警 / 落地冲击 ----------
+function spawnFx(kind, x, y, o = {}) { fxList.push(Object.assign({ kind, x, y, t: 0, life: o.life || 0.5 }, o)); }
+function updateFx(dt) {
+  for (let i = fxList.length - 1; i >= 0; i--) {
+    const f = fxList[i];
+    f.t += dt;
+    if (f.kind === 'warn' && !f.fired && f.t >= f.life) {       // 预警结束 → 落地伤害
+      f.fired = true;
+      spawnFx('slam', f.x, f.y, { life: 0.32, r: f.r });
+      if (f.dmg && Math.hypot(player.x - f.x, player.y - f.y) < f.r) hurtPlayer(f.dmg);
+    }
+    if (f.t >= f.life) fxList.splice(i, 1);
+  }
+}
+function drawFx(f) {
+  const p = Math.min(1, f.t / f.life);
+  ctx.save();
+  if (f.kind === 'shockwave') {
+    const r = f.r * p;
+    ctx.globalAlpha = (1 - p) * 0.85; ctx.strokeStyle = f.color || '#ffd27a';
+    ctx.lineWidth = (f.w || 9) * (1 - p) + 2;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, r, r * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = (1 - p) * 0.35; ctx.lineWidth *= 0.5;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, r * 0.66, r * 0.36, 0, 0, Math.PI * 2); ctx.stroke();
+  } else if (f.kind === 'warn') {
+    const pulse = 0.5 + 0.5 * Math.sin(f.t * 20);
+    ctx.globalAlpha = 0.22 + 0.3 * pulse; ctx.fillStyle = f.color || '#e23b4e';
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r, f.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.8; ctx.strokeStyle = '#ff5a5a'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r, f.r * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+    const ir = f.r * (1 - p); ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, ir, ir * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+  } else if (f.kind === 'slam') {
+    const r = (f.r || 90) * p;
+    ctx.globalAlpha = (1 - p) * 0.9; ctx.fillStyle = '#fff2cc';
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = (1 - p) * 0.7; ctx.strokeStyle = '#ffae42'; ctx.lineWidth = 7 * (1 - p) + 2;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, r * 1.15, r * 0.63, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 子弹绘制：按武器子弹样式（光晕 + 拖尾 + 5 种形态）
+function drawBullet(b) {
+  const v = b.vis || { shape: 'orb', color: '#FFE45A', glow: '#FF9F27', r: b.r };
+  const r = v.r || b.r, ang = Math.atan2(b.vy, b.vx);
+  ctx.save();
+  ctx.globalAlpha = 0.32; ctx.strokeStyle = v.glow; ctx.lineWidth = r * 1.1; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * 0.016, b.y - b.vy * 0.016); ctx.stroke();
+  ctx.globalAlpha = 1;
+  if (v.shape === 'beam') {
+    ctx.translate(b.x, b.y); ctx.rotate(ang);
+    ctx.globalAlpha = 0.5; ctx.fillStyle = v.glow; ctx.fillRect(-r * 3, -r * 0.9, r * 6, r * 1.8);
+    ctx.globalAlpha = 1; ctx.fillStyle = v.color; ctx.fillRect(-r * 2.2, -r * 0.45, r * 4.4, r * 0.9);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-r * 1.4, -r * 0.2, r * 2.8, r * 0.4);
+  } else if (v.shape === 'energy') {
+    ctx.globalAlpha = 0.4; ctx.fillStyle = v.glow;
+    ctx.beginPath(); ctx.arc(b.x, b.y, r * 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = v.color;
+    ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.85; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(b.x, b.y, r * (1.1 + 0.25 * Math.sin(worldT * 18)), 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.4, 0, Math.PI * 2); ctx.fill();
+  } else if (v.shape === 'fire') {
+    const fr = r * (0.85 + 0.3 * Math.sin(worldT * 30 + b.x));
+    ctx.globalAlpha = 0.5; ctx.fillStyle = v.glow;
+    ctx.beginPath(); ctx.arc(b.x, b.y, fr * 1.3, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.95; ctx.fillStyle = v.color;
+    ctx.beginPath(); ctx.arc(b.x, b.y, fr, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff6d0';
+    ctx.beginPath(); ctx.arc(b.x, b.y, fr * 0.45, 0, Math.PI * 2); ctx.fill();
+  } else if (v.shape === 'bolt') {
+    ctx.translate(b.x, b.y); ctx.rotate(ang);
+    const zig = [[-r*2,0],[-r,-r],[0,r*0.6],[r,-r*0.7],[r*2,0]];
+    ctx.globalAlpha = 0.6; ctx.strokeStyle = v.glow; ctx.lineWidth = 3;
+    ctx.beginPath(); zig.forEach((q,i)=>ctx[i?'lineTo':'moveTo'](q[0],q[1])); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.strokeStyle = v.color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); zig.forEach((q,i)=>ctx[i?'lineTo':'moveTo'](q[0],q[1])); ctx.stroke();
+  } else {
+    ctx.globalAlpha = 0.4; ctx.fillStyle = v.glow;
+    ctx.beginPath(); ctx.arc(b.x, b.y, r * 1.7, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = v.color;
+    ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(b.x - r * 0.25, b.y - r * 0.25, r * 0.4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 function spawnCampGoblins(camp) {
@@ -316,7 +406,7 @@ function update(dt) {
         bullets.push({
           x: ax + Math.cos(base) * tip, y: gy + Math.sin(base) * tip,
           vx: Math.cos(ang) * wpn.speed, vy: Math.sin(ang) * wpn.speed,
-          r: wpn.bulletR, dmg: wpn.damage, pierce: wpn.pierce, hit: [],
+          r: wpn.bulletR, dmg: wpn.damage, pierce: wpn.pierce, hit: [], vis: wpn.bullet,
         });
       }
       player.fireCd = 1 / wpn.fireRate;
@@ -439,6 +529,11 @@ function update(dt) {
     if (boss.dying || !monsters.includes(boss)) boss = null;
     else {
       const bc = CONFIG.monsters[boss.type];
+      boss.aoeCd = (boss.aoeCd == null ? 4 : boss.aoeCd) - dt;     // 周期 AOE：玩家脚下预警 → 落地
+      if (boss.aoeCd <= 0) {
+        boss.aoeCd = 5;
+        spawnFx('warn', player.x, player.y, { r: 115, life: 0.75, dmg: Math.round(bc.damage * 1.3), color: 'rgba(230,60,70,0.9)' });
+      }
       if (bc.summon) {
         boss.summonCd -= dt;
         if (boss.summonCd <= 0) {
@@ -504,6 +599,7 @@ function update(dt) {
             hurtPlayer(cfg.damage * (m.dmgMul || 1));
             if (cfg.fireFx) spawnFireFx(player.x, player.y);
           }
+          if (cfg.boss) spawnFx('shockwave', m.x, m.y + 6, { r: cfg.attackRange * 1.7, color: '#ffd27a', life: 0.45 });
         } else {
           const p = cfg.projectile;
           const n = cfg.barrage || 1, baseA = Math.atan2(dy, dx);
@@ -593,6 +689,7 @@ function update(dt) {
   }
 
   updateUnits(dt);
+  updateFx(dt);
 
   for (let i = floaters.length - 1; i >= 0; i--) {
     const f = floaters[i];
@@ -696,6 +793,13 @@ function drawMonster(m) {
     f = Math.floor(t * a.fps) % a.frames;
   }
   if (!m.dying) shadow(m.x, m.y + 12, cfg.radius + 6);
+  if (cfg.boss && !m.dying) {                          // Boss 脚下脉动危险光环
+    ctx.save();
+    const pl = 0.5 + 0.5 * Math.sin(worldT * 4);
+    ctx.globalAlpha = 0.16 + 0.1 * pl; ctx.fillStyle = '#e23b4e';
+    ctx.beginPath(); ctx.ellipse(m.x, m.y + 14, cfg.radius * 1.7, cfg.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   ctx.translate(m.x, m.y - cfg.bodyOffsetY * cfg.scale);
   if (m.flip) ctx.scale(-1, 1);
   let _flt = cfg.tint ? cfg.tint : '';
@@ -792,16 +896,12 @@ function drawWorldScene() {
   eprojs.forEach(drawEproj);
   dynamites.forEach(drawDynamiteE);
   arrows.forEach(drawArrowE);
-  bullets.forEach(b => {
-    ctx.fillStyle = C.bullet;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  bullets.forEach(drawBullet);
   petProjs.forEach(drawPetProj);
   effects.forEach(drawEffectE);
   fireFxs.forEach(drawFireFxE);
   booms.forEach(drawBoom);
+  fxList.forEach(drawFx);
 
   // 指针标记（Tiny Swords pointers 1-6 全分配）
   if (state === 'playing') {
@@ -1039,7 +1139,7 @@ function drawShop() {
     ctx.scale(-1.45, 1.45);
     ctx.drawImage(heroImgs.idle, fr.x, fr.y, fr.w, fr.h, -64, -60, fr.w, fr.h);
     ctx.restore();
-    drawPixelIcon(HERO_GUNS[meta.weapon].img, 152, 328, 76);
+    drawPixelIcon((HERO_GUNS[meta.weapon] || HERO_GUNS.pistol).img, 152, 328, 76);
     ctx.textAlign = 'center';
     ctx.fillStyle = UI_TEXT;
     ctx.font = '16px -apple-system, sans-serif';
@@ -1249,9 +1349,10 @@ function draw() {
 
 // ---------- UI 事件路由 ----------
 let _bgmWant = '';
-function syncBgm() {                              // BGM 跟随场景：战斗用高能曲，标题/商城用舒缓曲
+function syncBgm() {                              // BGM 跟随场景：Boss战 > 普通战斗 > 菜单
   if (!window.AUDIO) return;
-  const want = (state === 'playing' || state === 'paused') ? 'battle' : 'menu';
+  let want = 'menu';
+  if (state === 'playing' || state === 'paused') want = (boss && !boss.dying) ? 'boss' : 'battle';
   if (want !== _bgmWant) { _bgmWant = want; AUDIO.startBGM(want); }
 }
 function startGame() { state = 'playing'; reset(); if (window.AUDIO) AUDIO.unlock(); }
@@ -1339,6 +1440,7 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   worldT += dt;
+  ctx.imageSmoothingQuality = 'high';
   try {
     input.poll();
     handleUI(dt);
