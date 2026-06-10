@@ -20,6 +20,12 @@ for (const [type, cfg] of Object.entries(CONFIG.monsters)) {
   }
 }
 
+// ---- 猫咪主角（TexturePacker 雪碧图，帧矩形内嵌于 hero.js）----
+const heroImgs = {
+  idle: loadImg('assets/player/idle.png'),
+  run: loadImg('assets/player/run.png'),
+};
+
 // ---- Scarloxy 精灵 + 元素特效 ----
 const petImgs = {}, petIcons = {}, effectImgs = {};
 for (const id of Object.keys(CONFIG.pets)) {

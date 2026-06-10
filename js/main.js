@@ -191,7 +191,7 @@ function applyLoadout() {
   stats = effectiveStats();
   if (stats.maxHp > oldMax) player.hp += stats.maxHp - oldMax;
   player.hp = Math.min(player.hp, stats.maxHp);
-  player.weaponVisual = stats.weapon.visual;
+  player.weaponId = meta.weapon;
   if (!pets.length || pets[0].id !== meta.activePet) {
     pets = (meta.activePet ? [meta.activePet] : []).map((id, i) => ({
       id, slot: i,
@@ -258,25 +258,29 @@ function update(dt) {
   player.fireCd -= dt;
   player.muzzle -= dt;
   player.invuln -= dt;
+  player.animT += dt;
 
   // 自动锁定 + 自动开火
-  const target = nearestMonster(player.x, player.y - 12, 520);
+  // 瞄准角相对固定点（身体中心+手部高度）计算，不随朝向偏移，避免目标在正上/正下时来回翻面
+  const SPR = CONFIG.player.sprite;
+  const target = nearestMonster(player.x, player.y, 520);
   player.lockTarget = target;
   if (target) {
-    const gx = player.x, gy = player.y - 12;
+    const gx = player.x, gy = player.y + SPR.handY;
     const d = Math.hypot(target.x - gx, target.y - gy) || 1;
     player.aim.x = (target.x - gx) / d;
     player.aim.y = (target.y - gy) / d;
     const wpn = stats.weapon;
     if (player.fireCd <= 0 && bullets.length < CONFIG.bullet.max) {
       const base = Math.atan2(player.aim.y, player.aim.x);
-      const tip = gunTip(wpn.visual);
+      const tip = heroGunTip(player.weaponId);
+      const ax = gx + player.face * SPR.handX;             // 持枪锚点（子弹从枪口出生）
       for (let i = 0; i < wpn.pellets; i++) {
         let ang = base;
         if (wpn.pellets > 1) ang += wpn.spread * (i / (wpn.pellets - 1) - 0.5) * 2;
         else if (wpn.spread > 0) ang += (Math.random() - 0.5) * 2 * wpn.spread;
         bullets.push({
-          x: gx + Math.cos(base) * tip, y: gy + Math.sin(base) * tip,
+          x: ax + Math.cos(base) * tip, y: gy + Math.sin(base) * tip,
           vx: Math.cos(ang) * wpn.speed, vy: Math.sin(ang) * wpn.speed,
           r: wpn.bulletR, dmg: wpn.damage, pierce: wpn.pierce, hit: [],
         });
@@ -288,6 +292,9 @@ function update(dt) {
     player.aim.x = input.moveX;
     player.aim.y = input.moveY;
   }
+  // 朝向迟滞带：瞄准接近竖直时保持原朝向，杜绝翻面抖动
+  if (player.aim.x > SPR.faceDead) player.face = 1;
+  else if (player.aim.x < -SPR.faceDead) player.face = -1;
 
   // 子弹
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -712,7 +719,7 @@ function drawWorldScene() {
   for (const mc of mercs) order.push({ y: mc.state === 'dead' ? mc.y - 1e6 : mc.y, fn: () => drawMerc(mc) });
   for (const sh of sheepL) if (inView(sh.x, sh.y, 130)) order.push({ y: sh.y, fn: () => drawSheepE(sh) });
   for (const p of pickups) if (inView(p.x, p.y, 130)) order.push({ y: p.y, fn: () => drawPickup(p) });
-  order.push({ y: player.y, fn: () => { shadow(player.x, player.y + 38, 26); drawStickman(ctx, player.x, player.y, player); } });
+  order.push({ y: player.y, fn: () => { shadow(player.x, player.y + 38, 26); drawHero(ctx, player.x, player.y, player); } });
   order.sort((a, b) => a.y - b.y);
   for (const o of order) o.fn();
 
