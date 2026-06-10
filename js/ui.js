@@ -47,7 +47,9 @@ function skinBtn(id, r, text, kind = 'secondary', fontSize = 18) {
   ctx.fillStyle = kind === 'disabled' ? 'rgba(90,58,26,0.5)' : UI_TEXT;
   ctx.font = `${fontSize}px -apple-system, sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(text, r.x + r.w / 2, r.y + r.h / 2 + fontSize * 0.34 + (pressed ? 2 : 0));
+  ctx.textBaseline = 'middle';            // 中文字形按几何中心对齐，修正按钮内偏上
+  ctx.fillText(text, r.x + r.w / 2, r.y + r.h * 0.52 + (pressed ? 2 : 0));
+  ctx.textBaseline = 'alphabetic';
 }
 
 // 小方块按钮 + 图标（图标三态: Regular/Pressed/Disable）
@@ -90,6 +92,36 @@ function ribbonTab(id, r, text, color, selected) {
   ctx.font = `${selected ? 17 : 15}px -apple-system, sans-serif`;
   ctx.textAlign = 'center';
   ctx.fillText(text, r.x + r.w / 2, r.y + h / 2 + 6);
+}
+
+// 像素装备图标（与 hero.js 枪械同风格的离屏画布）
+const EQUIP_ICONS = (() => {
+  function make(draw) {
+    const c = document.createElement('canvas');
+    c.width = 16; c.height = 16;
+    const g = c.getContext('2d');
+    const px = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    draw(px);
+    return c;
+  }
+  const o = '#23272f';
+  return {
+    leather: make(px => { px(3, 2, 10, 12, o); px(4, 3, 8, 10, '#8a5429'); px(6, 3, 4, 3, o); px(5, 6, 6, 6, '#a96b38'); }),
+    steel:   make(px => { px(3, 2, 10, 12, o); px(4, 3, 8, 10, '#9aa3b8'); px(6, 3, 4, 3, o); px(5, 6, 6, 6, '#c7cedd'); }),
+    boots:   make(px => { px(4, 1, 5, 9, o); px(5, 2, 3, 7, '#8a5429'); px(4, 9, 9, 6, o); px(5, 10, 7, 4, '#a96b38'); }),
+    mag:     make(px => { px(4, 2, 8, 12, o); px(5, 3, 6, 10, '#ffd23e'); px(5, 5, 6, 1, '#b8762a'); px(5, 8, 6, 1, '#b8762a'); px(5, 11, 6, 1, '#b8762a'); }),
+    amulet:  make(px => { px(7, 1, 2, 4, '#8a5429'); px(4, 5, 8, 9, o); px(5, 6, 6, 7, '#9b59d0'); px(7, 8, 2, 2, '#e8d8ff'); }),
+  };
+})();
+
+// 像素图（离屏画布）以最近邻放大绘制：武器用 HERO_GUNS[id].img，装备用 EQUIP_ICONS[id]
+function drawPixelIcon(img, x, y, size) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  const sc = size / Math.max(img.width, img.height);
+  const w = img.width * sc, h = img.height * sc;
+  ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
+  ctx.restore();
 }
 
 // 丝带横标（3Slides）

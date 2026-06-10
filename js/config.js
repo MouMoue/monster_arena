@@ -12,6 +12,8 @@ const CONFIG = {
     speed: 240,
     radius: 20,
     invuln: 0.5,
+    // 猫咪雪碧图: scale 相对 128px 源帧, hand 为持枪锚点偏移(x 随朝向取反), faceDead 朝向迟滞带
+    sprite: { scale: 0.62, handX: 14, handY: 13, fps: 10, faceDead: 0.12 },
   },
 
   bullet: {
@@ -21,39 +23,39 @@ const CONFIG = {
 
   weapons: {
     pistol:  { name: '手枪',   desc: '伤害25 · 射速4',        price: 0,    level: 1, damage: 25, fireRate: 4,  speed: 600, pellets: 1, spread: 0,    pierce: 0, bulletR: 4,   visual: { len: 17, w: 6 } },
-    smg:     { name: '冲锋枪', desc: '伤害12 · 射速10',       price: 150,  level: 2, damage: 12, fireRate: 10, speed: 650, pellets: 1, spread: 0.06, pierce: 0, bulletR: 3,   visual: { len: 22, w: 5 } },
-    shotgun: { name: '霰弹枪', desc: '5连珠散射 · 单发伤害12', price: 300,  level: 3, damage: 12, fireRate: 1.6, speed: 560, pellets: 5, spread: 0.42, pierce: 0, bulletR: 3.5, visual: { len: 24, w: 8 } },
-    rifle:   { name: '狙击步枪', desc: '伤害60 · 穿透2个敌人',  price: 600,  level: 5, damage: 60, fireRate: 2,  speed: 900, pellets: 1, spread: 0,    pierce: 2, bulletR: 4.5, visual: { len: 30, w: 5 } },
-    minigun: { name: '加特林', desc: '伤害15 · 射速16',       price: 1200, level: 7, damage: 15, fireRate: 16, speed: 700, pellets: 1, spread: 0.12, pierce: 0, bulletR: 3.5, visual: { len: 30, w: 9 } },
+    smg:     { name: '冲锋枪', desc: '伤害12 · 射速10',       price: 450,  level: 2, damage: 12, fireRate: 10, speed: 650, pellets: 1, spread: 0.06, pierce: 0, bulletR: 3,   visual: { len: 22, w: 5 } },
+    shotgun: { name: '霰弹枪', desc: '5连珠散射 · 单发伤害12', price: 900,  level: 3, damage: 12, fireRate: 1.6, speed: 560, pellets: 5, spread: 0.42, pierce: 0, bulletR: 3.5, visual: { len: 24, w: 8 } },
+    rifle:   { name: '狙击步枪', desc: '伤害60 · 穿透2个敌人',  price: 1800,  level: 5, damage: 60, fireRate: 2,  speed: 900, pellets: 1, spread: 0,    pierce: 2, bulletR: 4.5, visual: { len: 30, w: 5 } },
+    minigun: { name: '加特林', desc: '伤害15 · 射速16',       price: 3600, level: 7, damage: 15, fireRate: 16, speed: 700, pellets: 1, spread: 0.12, pierce: 0, bulletR: 3.5, visual: { len: 30, w: 9 } },
   },
 
   equipment: {
-    leather: { name: '皮甲',     desc: '生命上限 +25',     price: 100, level: 2, effect: { maxHp: 25 } },
-    boots:   { name: '疾跑靴',   desc: '移动速度 +15%',    price: 250, level: 3, effect: { speedMul: 0.15 } },
-    steel:   { name: '钢板甲',   desc: '生命上限 +50',     price: 400, level: 4, effect: { maxHp: 50 } },
-    mag:     { name: '快装弹夹', desc: '射速 +20%',        price: 500, level: 5, effect: { rateMul: 0.20 } },
-    amulet:  { name: '守护护符', desc: '受击无敌 +50%',    price: 800, level: 6, effect: { invulnMul: 0.5 } },
+    leather: { name: '皮甲',     desc: '生命上限 +25',     price: 300, level: 2, effect: { maxHp: 25 } },
+    boots:   { name: '疾跑靴',   desc: '移动速度 +15%',    price: 750, level: 3, effect: { speedMul: 0.15 } },
+    steel:   { name: '钢板甲',   desc: '生命上限 +50',     price: 1200, level: 4, effect: { maxHp: 50 } },
+    mag:     { name: '快装弹夹', desc: '射速 +20%',        price: 1500, level: 5, effect: { rateMul: 0.20 } },
+    amulet:  { name: '守护护符', desc: '受击无敌 +50%',    price: 2400, level: 6, effect: { invulnMul: 0.5 } },
   },
 
   // 精灵图鉴（Scarloxy 全 16 只）：每次只能带一只出战（商城里点击已拥有的切换出战）
   // 攻击方式：朝目标发射元素技能弹，命中爆发；ice 减速 / explosion 范围溅射 / splash 击退 / scratch 高频
   pets: {
-    larvea:      { name: '拉维虫',   element: '草', price: 300,  level: 3,  damage: 14, cooldown: 1.2, effect: 'green' },
-    plumette:    { name: '小绒羽',   element: '风', price: 450,  level: 4,  damage: 12, cooldown: 0.9, effect: 'scratch' },
-    sparchu:     { name: '斯帕丘',   element: '火', price: 500,  level: 5,  damage: 18, cooldown: 1.3, effect: 'fire' },
-    finsta:      { name: '小水鳍',   element: '水', price: 650,  level: 6,  damage: 16, cooldown: 1.2, effect: 'splash', kb: 14 },
-    cleaf:       { name: '克里夫',   element: '草', price: 900,  level: 7,  damage: 26, cooldown: 1.6, effect: 'green' },
-    pouch:       { name: '帕奇袋',   element: '风', price: 1000, level: 8,  damage: 20, cooldown: 1.1, effect: 'scratch' },
-    cindrill:    { name: '辛德钻',   element: '火', price: 1200, level: 9,  damage: 30, cooldown: 1.5, effect: 'fire' },
-    gulfin:      { name: '高尔芬',   element: '水', price: 1300, level: 10,  damage: 24, cooldown: 1.3, effect: 'splash', kb: 18 },
-    jacana:      { name: '贾卡纳',   element: '水', price: 1500, level: 11,  damage: 22, cooldown: 1.0, effect: 'splash', kb: 12 },
-    friolera:    { name: '芙琳拉',   element: '冰', face: 'right', price: 1500, level: 12,  damage: 22, cooldown: 1.5, effect: 'ice', slow: 2.0 },
-    ivieron:     { name: '艾维龙',   element: '草', price: 1800, level: 13,  damage: 34, cooldown: 1.5, effect: 'green' },
-    pluma:       { name: '普鲁玛',   element: '风', price: 2200, level: 14,  damage: 30, cooldown: 0.9, effect: 'scratch' },
-    charmadillo: { name: '查玛甲',   element: '火', price: 2600, level: 16, damage: 45, cooldown: 1.8, effect: 'fire' },
-    draem:       { name: '德雷姆',   element: '爆', price: 3000, level: 17, damage: 36, cooldown: 1.4, effect: 'explosion', aoe: 70 },
-    finiette:    { name: '菲尼特',   element: '水', price: 3500, level: 18, damage: 42, cooldown: 1.5, effect: 'splash', kb: 22 },
-    atrox:       { name: '阿特罗斯', element: '爆', price: 4200, level: 20, damage: 55, cooldown: 1.6, effect: 'explosion', aoe: 85 },
+    larvea:      { name: '拉维虫',   element: '草', price: 900,  level: 5,  damage: 14, cooldown: 1.2, effect: 'green' },
+    plumette:    { name: '小绒羽',   element: '风', price: 1350,  level: 6,  damage: 12, cooldown: 0.9, effect: 'scratch' },
+    sparchu:     { name: '斯帕丘',   element: '火', price: 1500,  level: 8,  damage: 18, cooldown: 1.3, effect: 'fire' },
+    finsta:      { name: '小水鳍',   element: '水', price: 1950,  level: 9,  damage: 16, cooldown: 1.2, effect: 'splash', kb: 14 },
+    cleaf:       { name: '克里夫',   element: '草', price: 2700,  level: 11,  damage: 26, cooldown: 1.6, effect: 'green' },
+    pouch:       { name: '帕奇袋',   element: '风', price: 3000, level: 12,  damage: 20, cooldown: 1.1, effect: 'scratch' },
+    cindrill:    { name: '辛德钻',   element: '火', price: 3600, level: 14,  damage: 30, cooldown: 1.5, effect: 'fire' },
+    gulfin:      { name: '高尔芬',   element: '水', price: 3900, level: 15,  damage: 24, cooldown: 1.3, effect: 'splash', kb: 18 },
+    jacana:      { name: '贾卡纳',   element: '水', price: 4500, level: 16,  damage: 22, cooldown: 1.0, effect: 'splash', kb: 12 },
+    friolera:    { name: '芙琳拉',   element: '冰', face: 'right', price: 4500, level: 17,  damage: 22, cooldown: 1.5, effect: 'ice', slow: 2.0 },
+    ivieron:     { name: '艾维龙',   element: '草', price: 5400, level: 19,  damage: 34, cooldown: 1.5, effect: 'green' },
+    pluma:       { name: '普鲁玛',   element: '风', price: 6600, level: 21,  damage: 30, cooldown: 0.9, effect: 'scratch' },
+    charmadillo: { name: '查玛甲',   element: '火', price: 7800, level: 23, damage: 45, cooldown: 1.8, effect: 'fire' },
+    draem:       { name: '德雷姆',   element: '爆', price: 9000, level: 25, damage: 36, cooldown: 1.4, effect: 'explosion', aoe: 70 },
+    finiette:    { name: '菲尼特',   element: '水', price: 10500, level: 27, damage: 42, cooldown: 1.5, effect: 'splash', kb: 22 },
+    atrox:       { name: '阿特罗斯', element: '爆', price: 12600, level: 30, damage: 55, cooldown: 1.6, effect: 'explosion', aoe: 85 },
   },
   petSheet: { frame: 192, cols: 4, idleFps: 6, attackFps: 10, castFrame: 2 },
   petSlots: [[-52, 26]],          // 单精灵出战
@@ -230,6 +232,7 @@ const CONFIG = {
     easy:   { name: '简单', spawnMul: 1.4, hpMul: 0.8, dmgMul: 0.7, coinMul: 1.0 },
     normal: { name: '普通', spawnMul: 1.0, hpMul: 1.0, dmgMul: 1.0, coinMul: 1.2 },
     hard:   { name: '困难', spawnMul: 0.6, hpMul: 1.5, dmgMul: 1.5, coinMul: 1.6 },
+    nightmare: { name: '噩梦', spawnMul: 0.45, hpMul: 2.2, dmgMul: 2.0, coinMul: 2.5 },
   },
 
   xp: { base: 100, growth: 75 },

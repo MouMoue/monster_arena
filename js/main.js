@@ -295,6 +295,8 @@ function update(dt) {
   // 朝向迟滞带：瞄准接近竖直时保持原朝向，杜绝翻面抖动
   if (player.aim.x > SPR.faceDead) player.face = 1;
   else if (player.aim.x < -SPR.faceDead) player.face = -1;
+  // 背向移动（面朝怪物倒退走）时跑步动画倒放，腿部与移动方向一致
+  player.backpedal = player.moving && input.moveX * player.face < 0;
 
   // 子弹
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -808,7 +810,7 @@ function drawHUD() {
 const PAUSE_BTN = { x: W - 50, y: 10, w: 38, h: 38 };
 const GAME_SHOP_BTN = { x: W - 94, y: 10, w: 38, h: 38 };
 function drawPauseBtn() {
-  iconBtn('pause', PAUSE_BTN, state === 'paused' ? 0 : 7, state === 'paused' ? 'hover' : 'blue');
+  iconBtn('pause', PAUSE_BTN, 7, state === 'paused' ? 'hover' : 'blue');
 }
 function inRect(p, r) { return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h; }
 
@@ -829,7 +831,8 @@ function drawTouchControls() {
 }
 
 // ---------- 标题 ----------
-const DIFF_BTNS = ['easy', 'normal', 'hard'].map((id, i) => ({ id, x: W / 2 - 150 + i * 110, y: H / 2 - 38, w: 80, h: 56 }));
+const DIFF_BTNS = ['easy', 'normal', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 205 + i * 110, y: H / 2 - 38, w: 80, h: 56 }));
+const DIFF_ICONS = [3, 4, 5, 8];
 const START_BTN = { x: W / 2 - 110, y: H / 2 + 46, w: 220, h: 52 };
 const SHOP_BTN = { x: W / 2 - 110, y: H / 2 + 110, w: 220, h: 46 };
 
@@ -849,7 +852,7 @@ function drawTitle() {
   for (let i = 0; i < DIFF_BTNS.length; i++) {
     const b = DIFF_BTNS[i];
     const sel = meta.difficulty === b.id;
-    iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, 3 + i, sel ? 'hover' : 'blue');
+    iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, DIFF_ICONS[i], sel ? 'hover' : 'blue');
     ctx.fillStyle = sel ? '#FAC775' : C.hudDim;
     ctx.font = '13px -apple-system, sans-serif';
     ctx.textAlign = 'center';
@@ -870,15 +873,16 @@ function drawTitle() {
   ctx.font = '14px -apple-system, sans-serif';
   ctx.fillText(`${meta.coins}`, W / 2 - 142, H - 28);
   ctx.fillStyle = C.hudDim;
-  ctx.fillText(`Lv.${li.lv}　武器：${CONFIG.weapons[meta.weapon].name}　精灵 ${meta.ownedPets.length}/16${meta.activePet ? '·出战' + CONFIG.pets[meta.activePet].name : ''}　佣兵 ${Object.values(meta.mercTier).filter(t => t >= 0).length}/3`, W / 2 - 110, H - 28);
+  ctx.fillText(`Lv.${li.lv}　武器：${CONFIG.weapons[meta.weapon].name}　精灵 ${meta.ownedPets.length}/16${meta.activePet ? '·出战' + CONFIG.pets[meta.activePet].name : ''}　佣兵 ${Object.values(meta.mercTier).filter(t => t >= 0).length}/3`, W / 2 - 88, H - 28);
 }
 
 // ---------- 商城（四页签：武器/装备/精灵/佣兵） ----------
 const SHOP_TABS = [
-  { id: 'weapon', label: '武器', color: 'Red', icon: 0 },
-  { id: 'equip', label: '装备', color: 'Blue', icon: 1 },
-  { id: 'pet', label: '精灵', color: 'Yellow', icon: 2 },
-  { id: 'merc', label: '佣兵', color: 'Red', icon: 3 },
+  { id: 'weapon', label: '武器', color: 'Red' },
+  { id: 'equip', label: '装备', color: 'Blue' },
+  { id: 'pet', label: '精灵', color: 'Yellow' },
+  { id: 'merc', label: '佣兵', color: 'Red' },
+  { id: 'hero', label: '角色', color: 'Blue' },
 ];
 const SHOP_BACK = { x: W - 120, y: 22, w: 44, h: 44 };
 let shopRows = [];
@@ -901,12 +905,12 @@ function drawShop() {
   ctx.fillRect(220, 34, 80, 10);
   ctx.fillStyle = '#9FE1CB';
   ctx.fillRect(220, 34, 80 * li.cur / li.need, 10);
-  iconBtn('back', SHOP_BACK, 9, 'red');
+  iconBtn('back', SHOP_BACK, 0, 'red');   // icon 01 = X
 
-  let tabX = 60;
+  let tabX = 50;
   for (const tab of SHOP_TABS) {
-    ribbonTab('tab_' + tab.id, { x: tabX, y: 84, w: 165, h: 44 }, tab.label, tab.color, shopTab === tab.id);
-    tabX += 180;
+    ribbonTab('tab_' + tab.id, { x: tabX, y: 84, w: 150, h: 44 }, tab.label, tab.color, shopTab === tab.id);
+    tabX += 174;
   }
 
   shopRows = [];
@@ -946,6 +950,47 @@ function drawShop() {
       shopRows.push(r);
       ry += 82;
     }
+  } else if (shopTab === 'hero') {
+    // 人物简介：当前属性总览（含装备/精灵/佣兵加成）
+    const st = effectiveStats();
+    const wpn = st.weapon;
+    cardBg({ x: 60, y: 148, w: 260, h: 332 }, 'equipped', false);
+    const fr = HERO_FRAMES.idle[Math.floor(worldT * 8) % HERO_FRAMES.idle.length];
+    ctx.save();
+    ctx.translate(190, 252);
+    ctx.scale(-1.45, 1.45);
+    ctx.drawImage(heroImgs.idle, fr.x, fr.y, fr.w, fr.h, -64, -60, fr.w, fr.h);
+    ctx.restore();
+    drawPixelIcon(HERO_GUNS[meta.weapon].img, 152, 328, 76);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = UI_TEXT;
+    ctx.font = '16px -apple-system, sans-serif';
+    ctx.fillText(`Lv.${li.lv} 猫猫枪手`, 190, 432);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(90,58,26,0.75)';
+    ctx.fillText(`难度：${diff().name}`, 190, 456);
+    const lines = [
+      ['生命上限', `${st.maxHp}`],
+      ['移动速度', `${Math.round(st.speed)} px/s`],
+      ['受击无敌', `${st.invuln.toFixed(2)} 秒`],
+      ['武器', wpn.name],
+      ['单发伤害', `${wpn.damage}${wpn.pellets > 1 ? ' ×' + wpn.pellets : ''}${wpn.pierce ? '（穿透' + wpn.pierce + '）' : ''}`],
+      ['射速', `${wpn.fireRate.toFixed(1)} 发/秒`],
+      ['每秒输出', `${Math.round(wpn.damage * wpn.fireRate * wpn.pellets)}`],
+      ['装备', meta.ownedEquip.length ? meta.ownedEquip.map(id => CONFIG.equipment[id].name).join('、') : '无'],
+      ['出战精灵', meta.activePet ? `${CONFIG.pets[meta.activePet].name}·${CONFIG.pets[meta.activePet].element}（伤${CONFIG.pets[meta.activePet].damage}）` : '无'],
+      ['佣兵', ['pawn', 'warrior', 'archer'].filter(c => meta.mercTier[c] >= 0).map(c => `${CONFIG.mercs[c].name}${CONFIG.mercTierNames[meta.mercTier[c]]}`).join('、') || '无'],
+    ];
+    ctx.textAlign = 'left';
+    lines.forEach(([k, v], i) => {
+      const yy = 180 + i * 33;
+      ctx.font = '14px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(90,58,26,0.7)';
+      ctx.fillText(k, 360, yy);
+      ctx.fillStyle = UI_TEXT;
+      ctx.font = '15px -apple-system, sans-serif';
+      ctx.fillText(String(v), 472, yy);
+    });
   } else if (shopTab === 'pet') {
     // 16 只精灵两列网格；点击已拥有的切换出战（每次只能带一只）
     const colW = (rw - 16) / 2;
@@ -994,12 +1039,18 @@ function drawShop() {
       const locked = li.lv < item.level;
       const equipped = shopTab === 'weapon' && meta.weapon === id;
       cardBg(r, equipped || (owned && shopTab !== 'weapon') ? 'equipped' : locked ? 'locked' : 'normal', uiPressedId === 'row_' + shopTab + '_' + id);
+      ctx.save();
+      if (locked) ctx.globalAlpha = 0.45;
+      ctx.drawImage(uiBanner.carved, r.x + 8, r.y + 7, 44, 44);
+      if (shopTab === 'weapon') drawPixelIcon(HERO_GUNS[id].img, r.x + 12, r.y + 11, 36);
+      else drawPixelIcon(EQUIP_ICONS[id], r.x + 14, r.y + 13, 32);
+      ctx.restore();
       ctx.fillStyle = locked ? 'rgba(90,58,26,0.55)' : UI_TEXT;
       ctx.font = '15px -apple-system, sans-serif';
-      ctx.fillText(item.name, r.x + 18, r.y + 24);
+      ctx.fillText(item.name, r.x + 64, r.y + 24);
       ctx.font = '12px -apple-system, sans-serif';
       ctx.fillStyle = 'rgba(90,58,26,0.75)';
-      ctx.fillText(item.desc, r.x + 18, r.y + rh - 14);
+      ctx.fillText(item.desc, r.x + 64, r.y + rh - 14);
       ctx.textAlign = 'right';
       ctx.font = '14px -apple-system, sans-serif';
       const cy = r.y + rh / 2 + 5;
@@ -1091,6 +1142,7 @@ function handleUI(dt) {
       if (code === 'Digit1') { meta.difficulty = 'easy'; saveMeta(); }
       else if (code === 'Digit2') { meta.difficulty = 'normal'; saveMeta(); }
       else if (code === 'Digit3') { meta.difficulty = 'hard'; saveMeta(); }
+      else if (code === 'Digit4') { meta.difficulty = 'nightmare'; saveMeta(); }
       else if (code === 'KeyB') { shopFrom = 'title'; state = 'shop'; }
       else if (code === 'Enter' || code === 'Space' || code === 'NumpadEnter') { uiPress('start'); startGame(); }
     } else if (state === 'shop') {
@@ -1122,10 +1174,10 @@ function handleUI(dt) {
         uiPress('back');
         state = shopFrom === 'game' ? 'paused' : shopFrom === 'gameover' ? 'gameover' : 'title';
       }
-      let tabX = 60;
+      let tabX = 50;
       for (const tab of SHOP_TABS) {
-        if (inRect(p, { x: tabX, y: 78, w: 165, h: 54 })) shopTab = tab.id;
-        tabX += 180;
+        if (inRect(p, { x: tabX, y: 78, w: 150, h: 54 })) shopTab = tab.id;
+        tabX += 174;
       }
       for (const r of shopRows) {
         if (inRect(p, r)) {
