@@ -40,9 +40,10 @@ function reset() {
     x: sx, y: sy,
     hp: stats.maxHp,
     aim: { x: 1, y: 0 },
+    face: 1, animT: 0,
     moving: false, phase: 0,
     fireCd: 0, muzzle: 0, invuln: 0,
-    weaponVisual: stats.weapon.visual,
+    weaponId: meta.weapon,
   };
   bullets = [];
   monsters = [];
@@ -1169,7 +1170,10 @@ function loop(now) {
 }
 
 let loadedImgs = 0;
+function imgDone() {
+  if (++loadedImgs === pending.length) { reset(); requestAnimationFrame(loop); }
+}
 pending.forEach(img => {
-  img.onload = () => { if (++loadedImgs === pending.length) { reset(); requestAnimationFrame(loop); } };
-  img.onerror = () => { console.error('加载失败: ' + img.src); };
+  img.onload = imgDone;
+  img.onerror = () => { console.error('加载失败: ' + img.src); imgDone(); };   // 缺图不卡启动
 });
