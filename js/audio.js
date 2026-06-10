@@ -65,7 +65,7 @@ const AUDIO = (() => {
   function shoot(weaponId) {
     if (!ctx || muted) return;
     const now = performance.now();
-    if (now - lastShot < 45) return; // 节流
+    if (now - lastShot < 90) return; // 节流（间隔越大越不吵）
     lastShot = now;
     const map = { pistol: 680, spread: 520, shotgun: 470, pierce: 900, rapid: 840, laser: 1020, smg: 800 };
     let base = map[weaponId];
@@ -74,8 +74,8 @@ const AUDIO = (() => {
       for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
       base = 560 + Math.abs(h) % 380;
     }
-    tone({ freq: base, to: base * 0.4, type: 'square', dur: 0.055, vol: 0.06 });
-    noise({ dur: 0.035, vol: 0.022, hp: 1200, lp: 7000 });
+    tone({ freq: base, to: base * 0.4, type: 'square', dur: 0.05, vol: 0.032 });
+    noise({ dur: 0.03, vol: 0.009, hp: 1400, lp: 6500 });
   }
 
   // ---- 击倒/击杀：低频 thud + 破碎噪声(大怪更低更长) ----
@@ -99,21 +99,55 @@ const AUDIO = (() => {
   // ---- 游戏结束：下行失败音 ----
   function gameOver() {
     if (!ctx || muted) return;
-    tone({ freq: 440, to: 110, type: 'triangle', dur: 0.5, vol: 0.22 });
-    tone({ freq: 330, to: 80, type: 'square', dur: 0.5, vol: 0.10, delay: 0.06 });
+    tone({ freq: 440, to: 110, type: 'triangle', dur: 0.5, vol: 0.11 });
+    tone({ freq: 330, to: 80, type: 'triangle', dur: 0.5, vol: 0.05, delay: 0.06 });
   }
 
   // ---- BGM：舒缓抒情循环（柔和 sine 和弦铺底 + 三角波琶音 + 留白主旋律，无硬鼓点）----
   const PROG = [
+    // 段 A
     { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
     { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
     { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
     { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
+    // 段 B
+    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
+    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
+    { bass: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, // Em7
+    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
+    // 段 C
+    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
+    { bass: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, // Em7
+    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
+    { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
+    // 段 D
+    { bass: 73.42, pad: [146.8, 174.6, 220.0, 261.6] }, // Dm7
+    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
+    { bass: 82.41, pad: [164.8, 196.0, 246.9, 293.7] }, // Em7
+    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
+    // 段 E
+    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
+    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
+    { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
+    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
   ];
-  // 32 步抒情主旋律（0 = 休止，留白制造呼吸感）
+  // 160 步主旋律：5 段乐句（A 明亮 / B 上扬 / C 温柔 / D 转折 / E 收束），每段 4 小节
   const MEL = [
+    // A
     523.3, 0, 0, 587.3, 0, 659.3, 0, 0, 784.0, 0, 0, 0, 659.3, 0, 587.3, 0,
     523.3, 0, 0, 493.9, 0, 440.0, 0, 0, 392.0, 0, 0, 0, 440.0, 0, 493.9, 0,
+    // B
+    587.3, 0, 0, 659.3, 0, 698.5, 0, 0, 880.0, 0, 0, 0, 784.0, 0, 659.3, 0,
+    659.3, 0, 0, 587.3, 0, 523.3, 0, 0, 493.9, 0, 0, 0, 440.0, 0, 392.0, 0,
+    // C
+    440.0, 0, 0, 392.0, 0, 329.6, 0, 0, 349.2, 0, 392.0, 0, 440.0, 0, 0, 0,
+    392.0, 0, 0, 349.2, 0, 329.6, 0, 0, 293.7, 0, 0, 0, 329.6, 0, 392.0, 0,
+    // D
+    587.3, 0, 0, 523.3, 0, 587.3, 0, 0, 659.3, 0, 587.3, 0, 523.3, 0, 0, 0,
+    493.9, 0, 0, 440.0, 0, 493.9, 0, 0, 523.3, 0, 0, 0, 587.3, 0, 659.3, 0,
+    // E
+    698.5, 0, 0, 659.3, 0, 587.3, 0, 0, 523.3, 0, 0, 0, 493.9, 0, 440.0, 0,
+    392.0, 0, 0, 440.0, 0, 493.9, 0, 0, 523.3, 0, 0, 0, 523.3, 0, 0, 0,
   ];
   const BPM = 100;
   const STEP = 60 / BPM / 2; // 八分音符
@@ -126,9 +160,9 @@ const AUDIO = (() => {
   function schedule() {
     if (!ctx) return;
     while (bgmNextT < ctx.currentTime + 0.25) {
-      const step = bgmStep % 32;
+      const step = bgmStep % 160;
       const dly = bgmNextT - ctx.currentTime;
-      const ch = PROG[Math.floor(step / 8) % 4];
+      const ch = PROG[Math.floor(step / 8) % 20];
       if (step % 8 === 0) pad(ch.pad, bgmNextT);                                                                            // 每小节铺一层柔和和弦
       if (step % 4 === 0) tone({ freq: ch.bass, type: 'triangle', dur: STEP * 3.4, vol: 0.055, delay: dly, attack: 0.03 }); // 柔和低音
       if (step % 2 === 0) tone({ freq: ch.pad[Math.floor(step / 2) % ch.pad.length], type: 'triangle', dur: STEP * 1.5, vol: 0.026, delay: dly, attack: 0.02 }); // 轻琶音
