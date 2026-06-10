@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Pawn 持枪效果预览 - monster_arena</title>
+<style>
+  :root { --bg:#1a1c22; --panel:#242730; --line:#3a3e4a; --text:#e8e9ec; --dim:#9aa0ae; --accent:#ffb937; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,"PingFang SC",sans-serif;
+         display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px; }
+  h1 { font-size:16px; color:var(--accent); }
+  h1 small { color:var(--dim); font-weight:400; font-size:12px; margin-left:8px; }
+  .bar { display:flex; gap:14px; flex-wrap:wrap; align-items:center; background:var(--panel);
+         border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
+  .bar .seg { display:flex; gap:5px; align-items:center; color:var(--dim); font-size:12px; }
+  .bar button { background:var(--bg); border:1px solid var(--line); color:var(--dim);
+                border-radius:5px; padding:3px 12px; cursor:pointer; font-size:12px; }
+  .bar button.on { background:var(--accent); border-color:var(--accent); color:#1a1c22; font-weight:600; }
+  canvas { border:1px solid var(--line); border-radius:8px; image-rendering:pixelated;
+           width:960px; max-width:96vw; cursor:crosshair; }
+  .tip { color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<h1>主角持枪效果预览<small>独立演示页，未改动任何游戏代码</small></h1>
+<div class="bar">
+  <div class="seg">武器 <span id="weapons"></span></div>
+  <div class="seg">角色 <span id="heroes"></span></div>
+  <div class="seg">动作 <span id="moves"></span></div>
+</div>
+<canvas id="cv" width="480" height="270"></canvas>
+<p class="tip">鼠标移入画面 = 手动瞄准（自动开火）；移出 = 自动锁定哥布林。</p>
+
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ---------- 资源 ----------
+const IMGS = {};
+// 猫猫主角帧数据（内嵌自 TexturePacker JSON 的 frame 矩形，避免 file:// 下 fetch 被拦截）
+const CAT = {
+  idle: [[0,0,128,119],[130,0,128,119],[260,0,128,120],[0,122,128,120],[130,122,128,120],[260,122,128,120],[0,244,128,120],[130,244,128,120],[260,244,128,119]].map(([x,y,w,h]) => ({x,y,w,h})),
+  run: [[0,0,128,121],[130,0,128,118],[260,0,128,119],[0,126,128,123],[130,126,128,123],[260,126,128,124],[0,252,128,124]].map(([x,y,w,h]) => ({x,y,w,h})),
+};
+function load(key, src) {
+  return new Promise((r, j) => {
+    const i = new Image();
+    i.onload = () => { IMGS[key] = i; r(); };
+    i.onerror = () => j(new Error('素材加载失败: ' + src));
+    i.src = src;
+  });
+}
+const SKINS = ['Blue', 'Red', 'Purple', 'Yellow'];
+const loads = [
+  load('catIdle', 'assets/player/idle.png'),
+  load('catRun', 'assets/player/run.png'),
+  load('tiles', 'assets/tiny_swords/terrain/ground/Tilemap_Flat.png'),
+  load('water', 'assets/tiny_swords/terrain/water/Water.png'),
+  load('foam', 'assets/tiny_swords/terrain/water/foam/Foam.png'),
+  load('deco05', 'assets/tiny_swords/deco/05.png'),
+  load('deco10', 'assets/tiny_swords/deco/10.png'),
+  load('deco14', 'assets/tiny_swords/deco/14.png'),
+  load('gobIdle', 'assets/monsters/goblin/Idle.png'),
+  load('gobHit', 'assets/monsters/goblin/TakeHit.png'),
+  ...SKINS.map(c => load('pawn' + c, `assets/tiny_swords/factions/knights/troops/pawn/${c.toLowerCase()}/Pawn_${c}.png`)),
+];
+
+// ---------- 像素枪（程序绘制，风格化占位，正式版可换 SamuelLee 素材） ----------
+const PAL = { o:'#23272f', s:'#6b7488', sl:'#9aa3b8', w:'#b8763e', wd:'#8a5429', a:'#ffd23e' };
+function makeGun(draw, w, h, grip, muzzle) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const px = (x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); };
+  draw(px);
+  return { img: c, w, h, grip, muzzle };  // grip/muzzle: 枪图内坐标
+}
+const GUNS = {
+  pistol: { name: '手枪', rate: 22, pellets: 1, spread: 0.04, flash: 5, kick: 1.5,
+    spr: makeGun(px => {
+      px(1,1,12,5,PAL.o); px(2,2,10,3,PAL.s); px(10,2,3,2,PAL.sl);
+      px(3,5,5,6,PAL.o); px(4,6,3,4,PAL.wd);
+    }, 15, 12, [5,8], [13,3]) },
+  rifle: { name: '步枪', rate: 7, pellets: 1, spread: 0.09, flash: 6, kick: 2,
+    spr: makeGun(px => {
+      px(0,3,26,4,PAL.o); px(1,4,24,2,PAL.s); px(22,4,4,1,PAL.sl);
+      px(0,1,6,4,PAL.o); px(1,2,4,2,PAL.wd);          // 枪托
+      px(9,6,4,7,PAL.o); px(10,7,2,5,PAL.w);          // 弹匣
+      px(15,6,3,4,PAL.o); px(16,7,1,2,PAL.wd);        // 握把
+    }, 26, 13, [11,8], [26,4]) },
+  shotgun: { name: '霰弹枪', rate: 38, pellets: 5, spread: 0.30, flash: 9, kick: 3.5,
+    spr: makeGun(px => {
+      px(0,2,24,3,PAL.o); px(1,3,22,1,PAL.sl);
+      px(0,4,22,3,PAL.o); px(1,5,20,1,PAL.s);
+      px(0,0,7,5,PAL.o); px(1,1,5,3,PAL.w);           // 枪托
+      px(10,6,6,3,PAL.o); px(11,7,4,1,PAL.wd);        // 护木
+    }, 24, 10, [9,6], [24,3]) },
+  sniper: { name: '狙击枪', rate: 55, pellets: 1, spread: 0, flash: 7, kick: 4,
+    spr: makeGun(px => {
+      px(0,4,32,3,PAL.o); px(1,5,30,1,PAL.s); px(28,5,4,1,PAL.sl);
+      px(0,2,7,5,PAL.o); px(1,3,5,3,PAL.wd);          // 枪托
+      px(10,1,8,3,PAL.o); px(11,2,6,1,PAL.a);         // 瞄准镜
+      px(12,7,3,4,PAL.o); px(20,7,2,3,PAL.o);
+    }, 32, 11, [13,7], [32,5]) },
+};
+
+// ---------- 状态 ----------
+const S = {
+  weapon: 'rifle', hero: 'cat', skin: 'Blue', move: 'run',
+  t: 0, cd: 0, recoil: 0, face: 1,            // face: 1=朝右 -1=朝左（带迟滞，避免中线抖动）
+  pawn: { x: 150, y: 168 },
+  gob: { x: 372, y: 172, hitT: 0, baseX: 372 },
+  aim: 0, mouse: null,
+  bullets: [], fx: [],
+};
+
+// ---------- 输入 ----------
+cv.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect();
+  S.mouse = [(e.clientX - r.left) / r.width * 480, (e.clientY - r.top) / r.height * 270];
+});
+cv.addEventListener('mouseleave', () => S.mouse = null);
+
+// URL 参数预设状态（便于直达指定效果，如 ?weapon=shotgun&aim=70,75&move=idle&skin=Red）
+const Q = new URLSearchParams(location.search);
+if (Q.get('weapon') && GUNS[Q.get('weapon')]) S.weapon = Q.get('weapon');
+if (Q.get('hero')) S.hero = Q.get('hero') === 'pawn' ? 'pawn' : 'cat';
+if (Q.get('skin') && SKINS.includes(Q.get('skin'))) { S.skin = Q.get('skin'); S.hero = 'pawn'; }
+if (Q.get('move')) S.move = Q.get('move') === 'idle' ? 'idle' : 'run';
+if (Q.get('aim')) { const [x, y] = Q.get('aim').split(',').map(Number); if (!isNaN(x)) S.mouse = [x, y]; }
+
+// ---------- 控制条 ----------
+function buttons(id, defs, get, set) {
+  const box = document.getElementById(id);
+  const render = () => {
+    box.innerHTML = '';
+    for (const [val, label] of defs) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.className = val === get() ? 'on' : '';
+      b.onclick = () => { set(val); render(); };
+      box.appendChild(b);
+    }
+  };
+  render();
+}
+buttons('weapons', Object.entries(GUNS).map(([k, g]) => [k, g.name]), () => S.weapon, v => S.weapon = v);
+buttons('heroes', [['cat', '猫猫'], ...SKINS.map(c => ['pawn' + c, 'Pawn' + { Blue: '蓝', Red: '红', Purple: '紫', Yellow: '黄' }[c]])],
+  () => S.hero === 'cat' ? 'cat' : 'pawn' + S.skin,
+  v => { if (v === 'cat') S.hero = 'cat'; else { S.hero = 'pawn'; S.skin = v.slice(4); } });
+buttons('moves', [['idle', '站立'], ['run', '跑动']], () => S.move, v => S.move = v);
+
+// ---------- 绘制 ----------
+// 草地岛屿：水面打底 + 泡沫 + 3x3 自动拼接块（边缘带描边，立体感来源）
+const ISLE = { x0: 1, y0: 1, x1: 13, y1: 7 };           // 岛屿瓦片范围（32px 格）
+function tileAt(col, row, x, y) { ctx.drawImage(IMGS.tiles, col * 64, row * 64, 64, 64, x, y, 32, 32); }
+function drawBg() {
+  // 水面
+  for (let y = 0; y < 270; y += 32)
+    for (let x = 0; x < 480; x += 32)
+      ctx.drawImage(IMGS.water, 0, 0, 64, 64, x, y, 32, 32);
+  // 岛屿边缘泡沫（8 帧动画，画在地形下层）
+  const ff = Math.floor(S.t / 8) % 8;
+  for (let ty = ISLE.y0; ty <= ISLE.y1; ty++)
+    for (let tx = ISLE.x0; tx <= ISLE.x1; tx++) {
+      const edge = tx === ISLE.x0 || tx === ISLE.x1 || ty === ISLE.y0 || ty === ISLE.y1;
+      if (edge) ctx.drawImage(IMGS.foam, ff * 192, 0, 192, 192, tx * 32 - 32, ty * 32 - 32, 96, 96);
+    }
+  // 岛屿地面（角/边/中心自动拼接）
+  for (let ty = ISLE.y0; ty <= ISLE.y1; ty++)
+    for (let tx = ISLE.x0; tx <= ISLE.x1; tx++) {
+      const cx = tx === ISLE.x0 ? 0 : tx === ISLE.x1 ? 2 : 1;
+      const cy = ty === ISLE.y0 ? 0 : ty === ISLE.y1 ? 2 : 1;
+      tileAt(cx, cy, tx * 32, ty * 32);
+    }
+  // 内嵌一小块沙地（沙地块在图集 5~7 列）
+  for (let ty = 2; ty <= 4; ty++)
+    for (let tx = 9; tx <= 12; tx++) {
+      const cx = tx === 9 ? 5 : tx === 12 ? 7 : 6;
+      const cy = ty === 2 ? 0 : ty === 4 ? 2 : 1;
+      tileAt(cx, cy, tx * 32, ty * 32);
+    }
+  ctx.drawImage(IMGS.deco05, 0, 0, 64, 64, 70, 60, 32, 32);
+  ctx.drawImage(IMGS.deco10, 0, 0, 64, 64, 400, 190, 32, 32);
+  ctx.drawImage(IMGS.deco14, 0, 0, 64, 64, 240, 200, 32, 32);
+}
+function shadow(x, y, w) {
+  ctx.fillStyle = 'rgba(20,25,35,.25)';
+  ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.32, 0, 0, 7); ctx.fill();
+}
+function drawPawn() {
+  const facingLeft = S.face === -1;
+  // 猫猫素材原生朝左，Pawn 素材原生朝右，翻转条件相反
+  const flip = S.hero === 'cat' ? !facingLeft : facingLeft;
+  shadow(S.pawn.x, S.pawn.y + 26, 20);
+  ctx.save();
+  ctx.translate(S.pawn.x, S.pawn.y);
+  if (flip) ctx.scale(-1, 1);
+  if (S.hero === 'cat') {
+    // 猫猫：TexturePacker 帧（顶部对齐裁边），128 源尺寸缩放至 60
+    const frames = CAT[S.move === 'run' ? 'run' : 'idle'];
+    const img = S.move === 'run' ? IMGS.catRun : IMGS.catIdle;
+    const fr = frames[Math.floor(S.t / 6) % frames.length];
+    const s = 60 / 128;
+    ctx.drawImage(img, fr.x, fr.y, fr.w, fr.h, -30, -30, fr.w * s, fr.h * s);
+  } else {
+    const img = IMGS['pawn' + S.skin];
+    const row = S.move === 'run' ? 1 : 0;
+    const f = Math.floor(S.t / 6) % 6;
+    ctx.drawImage(img, f * 192, row * 192, 192, 192, -48, -48, 96, 96);
+  }
+  ctx.restore();
+}
+function gunAnchor() {                                       // 手部位置（朝向侧前方）
+  const dir = S.face;
+  return S.hero === 'cat'
+    ? [S.pawn.x + dir * 11, S.pawn.y + 10]
+    : [S.pawn.x + dir * 9, S.pawn.y + 7];
+}
+function drawGun() {
+  const g = GUNS[S.weapon], spr = g.spr;
+  const [ax, ay] = gunAnchor();
+  const flip = S.face === -1;
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.rotate(S.aim);
+  if (flip) ctx.scale(1, -1);                 // 翻面防止枪倒拿
+  ctx.translate(-S.recoil, 0);                // 后坐
+  ctx.drawImage(spr.img, -spr.grip[0], -spr.grip[1]);
+  ctx.restore();
+}
+function muzzlePos() {
+  const g = GUNS[S.weapon].spr, [ax, ay] = gunAnchor();
+  const dx = g.muzzle[0] - g.grip[0] - S.recoil;
+  const flip = S.face === -1;
+  const dy = (g.muzzle[1] - g.grip[1]) * (flip ? -1 : 1);
+  return [ax + dx * Math.cos(S.aim) - dy * Math.sin(S.aim),
+          ay + dx * Math.sin(S.aim) + dy * Math.cos(S.aim)];
+}
+function drawGoblin() {
+  const hit = S.gob.hitT > 0;
+  const img = hit ? IMGS.gobHit : IMGS.gobIdle;
+  const f = Math.floor(S.t / 8) % 4;
+  shadow(S.gob.x, S.gob.y + 26, 20);
+  // LuizMelo 素材原生朝左，正好面向左侧的主角
+  ctx.drawImage(img, f * 150, 0, 150, 150, S.gob.x - 50, S.gob.y - 50, 100, 100);
+}
+function drawFx() {
+  for (const p of S.fx) {
+    const k = p.life / p.max;
+    if (p.kind === 'flash') {
+      const r = p.size * (0.6 + 0.4 * k);
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = `rgba(255,150,40,${0.85 * k})`;
+      star(r * 1.5, r * 0.55); ctx.fill();
+      ctx.fillStyle = `rgba(255,225,90,${0.9 * k})`;
+      star(r, 0.4 * r); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,230,${k})`;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.4, 0, 7); ctx.fill();
+      ctx.restore();
+    } else if (p.kind === 'spark') {
+      ctx.fillStyle = `rgba(255,${170 + 60 * k | 0},60,${k})`;
+      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+      p.x += p.vx; p.y += p.vy; p.vy += 0.15;
+    } else if (p.kind === 'smoke') {
+      ctx.fillStyle = `rgba(180,180,190,${0.35 * k})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.4 - k * 0.6), 0, 7); ctx.fill();
+      p.x += p.vx; p.y += p.vy;
+    }
+    p.life--;
+  }
+  S.fx = S.fx.filter(p => p.life > 0);
+}
+function star(R, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4, rad = i % 2 ? r : R;
+    ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * rad, Math.sin(a) * rad);
+  }
+  ctx.closePath();
+}
+function drawBullets() {
+  ctx.lineCap = 'round';
+  for (const b of S.bullets) {
+    ctx.strokeStyle = 'rgba(255,220,120,.9)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(b.x - b.vx * 1.6, b.y - b.vy * 1.6);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+}
+
+// ---------- 逻辑 ----------
+function fire() {
+  const g = GUNS[S.weapon];
+  const [mx, my] = muzzlePos();
+  S.recoil = g.kick;
+  S.fx.push({ kind: 'flash', x: mx, y: my, rot: S.aim, size: g.flash, life: 5, max: 5 });
+  if (S.weapon === 'shotgun')
+    for (let i = 0; i < 3; i++)
+      S.fx.push({ kind: 'smoke', x: mx, y: my, vx: Math.cos(S.aim) * 0.5 + (Math.random() - 0.5), vy: -0.4 - Math.random() * 0.4, size: 2 + Math.random() * 2, life: 22, max: 22 });
+  for (let i = 0; i < g.pellets; i++) {
+    const a = S.aim + (Math.random() - 0.5) * 2 * g.spread;
+    const sp = S.weapon === 'sniper' ? 14 : 8;
+    S.bullets.push({ x: mx, y: my, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp });
+  }
+}
+function step() {
+  S.t++;
+  // 哥布林缓慢踱步
+  S.gob.x = S.gob.baseX + Math.sin(S.t / 90) * 26;
+  if (S.gob.hitT > 0) S.gob.hitT--;
+  // 瞄准：角度相对固定的身体中心计算（不随朝向偏移，杜绝翻面反馈循环）；
+  // 贴身死区内保持原角度；朝向带 ±8px 迟滞带，中线/正上/正下不再来回翻面
+  const tx = S.mouse ? S.mouse[0] : S.gob.x, ty = S.mouse ? S.mouse[1] : S.gob.y;
+  const adx = tx - S.pawn.x, ady = ty - (S.pawn.y + 9);
+  if (adx * adx + ady * ady > 18 * 18) {
+    S.aim = Math.atan2(ady, adx);
+    if (S.face === 1 && adx < -8) S.face = -1;
+    else if (S.face === -1 && adx > 8) S.face = 1;
+  }
+  // 开火
+  if (--S.cd <= 0) { fire(); S.cd = GUNS[S.weapon].rate; }
+  S.recoil *= 0.75;
+  // 子弹
+  for (const b of S.bullets) {
+    b.x += b.vx; b.y += b.vy;
+    const dx = b.x - S.gob.x, dy = b.y - S.gob.y;
+    if (dx * dx + dy * dy < 18 * 18) {
+      b.dead = true; S.gob.hitT = 16;
+      for (let i = 0; i < 4; i++)
+        S.fx.push({ kind: 'spark', x: b.x, y: b.y, vx: -b.vx * 0.12 + (Math.random() - 0.5) * 1.6, vy: -1 - Math.random(), life: 12, max: 12 });
+    }
+  }
+  S.bullets = S.bullets.filter(b => !b.dead && b.x > -20 && b.x < 500 && b.y > -20 && b.y < 290);
+}
+function frame() {
+  step();
+  drawBg();
+  drawGoblin();
+  drawPawn();
+  drawGun();
+  drawBullets();
+  drawFx();
+  requestAnimationFrame(frame);
+}
+Promise.all(loads).then(() => frame()).catch(err => {
+  ctx.fillStyle = '#242730'; ctx.fillRect(0, 0, 480, 270);
+  ctx.fillStyle = '#ff7b6b'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(err.message, 240, 128);
+  ctx.fillStyle = '#9aa0ae';
+  ctx.fillText('请用 node server.js 8766 启动后访问 http://localhost:8766/demo_pawn_gun.html', 240, 150);
+});
+</script>
+</body>
+</html>

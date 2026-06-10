@@ -96,8 +96,8 @@ const state = { group: 'all', q: '' };
 const $ = id => document.getElementById(id);
 
 // 分类按钮
-const groups = [...new Set(items.map(i => i.group))]
-  .sort((a, b) => (GROUP_ORDER.indexOf(a) + 99 >>> 0) - (GROUP_ORDER.indexOf(b) + 99 >>> 0));
+const orderOf = g => { const i = GROUP_ORDER.indexOf(g); return i === -1 ? 999 : i; };
+const groups = [...new Set(items.map(i => i.group))].sort((a, b) => orderOf(a) - orderOf(b));
 function renderGroups() {
   $('groups').innerHTML = '';
   for (const g of ['all', ...groups]) {
@@ -155,8 +155,6 @@ function openModal(it) {
   m.img = new Image();
   m.img.onload = () => {
     m.fsize = detectFrame(it.w, it.h);
-    const cols = Math.floor(it.w / m.fsize), rows = Math.floor(it.h / m.fsize);
-    $('m-dims').textContent = `${it.w}×${it.h} · ${it.kb}KB · ${cols}×${rows} 帧格`;
     renderFsizes();
     syncCtrl();
     drawStill();
@@ -180,6 +178,8 @@ function renderFsizes() {
   }
 }
 function syncCtrl() {
+  const cols = Math.floor(m.it.w / m.fsize), rows = Math.floor(m.it.h / m.fsize);
+  $('m-dims').textContent = `${m.it.w}×${m.it.h} · ${m.it.kb}KB · ${cols}×${rows} 帧格`;
   $('zoom-v').textContent = m.zoom + 'x';
   $('zoom').value = m.zoom;
   $('grid-btn').className = m.grid ? 'on' : '';

@@ -65,7 +65,9 @@ function drawHero(ctx, x, y, o) {
 
   // 身体：原生朝左，朝右时镜像；帧顶部对齐，按中心摆放
   const frames = HERO_FRAMES[o.moving ? 'run' : 'idle'];
-  const fr = frames[Math.floor(o.animT * S.fps) % frames.length];
+  let fi = Math.floor(o.animT * S.fps) % frames.length;
+  if (o.backpedal) fi = frames.length - 1 - fi;          // 背向移动时倒放跑步循环
+  const fr = frames[fi];
   const img = o.moving ? heroImgs.run : heroImgs.idle;
   const half = 64 * S.scale;
   ctx.save();
