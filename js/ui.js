@@ -48,7 +48,7 @@ function skinBtn(id, r, text, kind = 'secondary', fontSize = 18) {
   ctx.font = `${fontSize}px -apple-system, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';            // 中文字形按几何中心对齐，修正按钮内偏上
-  ctx.fillText(text, r.x + r.w / 2, r.y + r.h * 0.52 + (pressed ? 2 : 0));
+  ctx.fillText(text, r.x + r.w / 2, r.y + r.h * 0.44 + (pressed ? 2 : 0));   // 按钮面板主体偏上（下方是底座），按 44% 高度居中
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -93,6 +93,29 @@ function ribbonTab(id, r, text, color, selected) {
   ctx.textAlign = 'center';
   ctx.fillText(text, r.x + r.w / 2, r.y + h / 2 + 6);
 }
+
+// 像素数字 4（仿 1-3 图标：深描边浅底板 + 深色数字）
+const ICON_FOUR = (() => {
+  const c = document.createElement('canvas');
+  c.width = 24; c.height = 24;
+  const g = c.getContext('2d');
+  g.fillStyle = '#3a4252';
+  g.fillRect(1, 0, 22, 24); g.fillRect(0, 1, 24, 22);      // 深色描边底
+  g.fillStyle = '#ece7db';
+  g.fillRect(2, 2, 20, 20);                                 // 浅底板
+  g.fillStyle = '#f8f4ec';
+  g.fillRect(2, 2, 20, 3);                                  // 顶部高光
+  g.fillStyle = '#cfc8b8';
+  g.fillRect(2, 19, 20, 3);                                 // 底部阴影
+  const GLYPH = ['...X.', '..XX.', '.X.X.', 'X..X.', 'XXXXX', '...X.', '...X.'];
+  g.fillStyle = '#3a4252';
+  GLYPH.forEach((row, gy) => {
+    for (let gx = 0; gx < row.length; gx++) {
+      if (row[gx] === 'X') g.fillRect(7 + gx * 2, 5 + gy * 2, 2, 2);
+    }
+  });
+  return c;
+})();
 
 // 像素装备图标（24px，描边+主体+高光，与 hero.js 枪械同风格）
 const EQUIP_ICONS = (() => {

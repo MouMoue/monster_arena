@@ -861,10 +861,7 @@ function drawTitle() {
       iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, DIFF_ICONS[i], sel ? 'hover' : 'blue');
     } else {
       ctx.drawImage(sel ? uiBtn.Hover : uiBtn.Blue, b.x + 8, b.y, 56, 56);
-      ctx.fillStyle = UI_TEXT;
-      ctx.font = '26px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('4', b.x + 36, b.y + 37);
+      drawPixelIcon(ICON_FOUR, b.x + 8 + (56 - 35) / 2, b.y + (56 - 35) / 2, 35);   // 像素数字4，与1-3图标同风格
     }
     ctx.fillStyle = sel ? '#FAC775' : C.hudDim;
     ctx.font = '13px -apple-system, sans-serif';
