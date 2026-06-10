@@ -19,14 +19,28 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-// ---------- 资源 ----------
-const goblinImg = { run: new Image(), death: new Image() };
-goblinImg.run.src = 'assets/monsters/goblin/Run.png';
-goblinImg.death.src = 'assets/monsters/goblin/Death.png';
+// ---------- 资源: 按怪物图鉴批量加载 ----------
+const images = {};
+const pending = [];
+for (const [type, cfg] of Object.entries(CONFIG.monsters)) {
+  images[type] = {};
+  for (const [anim, a] of Object.entries(cfg.anims)) {
+    const img = new Image();
+    img.src = 'assets/monsters/' + a.file;
+    images[type][anim] = img;
+    pending.push(img);
+  }
+  if (cfg.projectile) {
+    const img = new Image();
+    img.src = 'assets/monsters/' + cfg.projectile.file;
+    images[type].projectile = img;
+    pending.push(img);
+  }
+}
 
 // ---------- 游戏状态 ----------
 let state = 'title';
-let player, bullets, monsters, playTime, kills, spawnTimer;
+let player, bullets, monsters, eprojs, playTime, kills, spawnTimer;
 
 function reset() {
   player = {
@@ -38,14 +52,14 @@ function reset() {
   };
   bullets = [];
   monsters = [];
+  eprojs = [];          // 敌方投射物（蘑菇孢子）
   playTime = 0;
   kills = 0;
   spawnTimer = 0.5;
 }
 
 function stage() {
-  const t = playTime;
-  for (const s of CONFIG.difficulty) if (t < s.until) return s;
+  for (const s of CONFIG.difficulty) if (playTime < s.until) return s;
 }
 function monsterCap(s) {
   return input.touchSeen ? Math.min(s.cap, CONFIG.mobileMonsterCap) : s.cap;
@@ -56,24 +70,54 @@ function hpMul(s) {
   return m;
 }
 
-function spawnMonster() {
-  const m = CONFIG.spawnMargin, g = CONFIG.goblin;
+function pickType(weights) {
+  let r = Math.random(), acc = 0;
+  for (const [type, w] of Object.entries(weights)) {
+    acc += w;
+    if (r < acc) return type;
+  }
+  return Object.keys(weights)[0];
+}
+
+function spawnMonster(s) {
+  const m = CONFIG.spawnMargin;
   const side = Math.floor(Math.random() * 4);
   const x = side === 0 ? -m : side === 1 ? W + m : Math.random() * W;
   const y = side < 2 ? Math.random() * H : (side === 2 ? -m : H + m);
-  const hp = Math.round(g.hp * hpMul(stage()));
-  monsters.push({ x, y, hp, maxHp: hp, hitCd: 0, animT: Math.random(), flip: false, dying: 0 });
+  const type = pickType(s.weights);
+  const hp = Math.round(CONFIG.monsters[type].hp * hpMul(s));
+  monsters.push({
+    type, x, y, hp, maxHp: hp,
+    state: 'move',            // move | attack | dying
+    animT: Math.random(), atkCd: 0, hitDone: false,
+    flip: false, dying: 0,
+  });
+}
+
+function nearestMonster() {
+  let best = null, bd = Infinity;
+  for (const m of monsters) {
+    if (m.dying) continue;
+    const d = Math.hypot(m.x - player.x, m.y - player.y);
+    if (d < bd) { bd = d; best = m; }
+  }
+  return best;
+}
+
+function hurtPlayer(dmg) {
+  if (player.invuln > 0) return;
+  player.hp -= dmg;
+  player.invuln = CONFIG.player.invuln;
+  if (player.hp <= 0) { player.hp = 0; gameOver(); }
 }
 
 // ---------- 更新 ----------
 function update(dt) {
   playTime += dt;
 
-  // 主角移动 + 朝向（边走边打，射击不锁移动）
+  // 主角移动（攻击全自动，移动永不锁定）
   player.moving = input.moveX !== 0 || input.moveY !== 0;
   if (player.moving) {
-    player.aim.x = input.moveX;
-    player.aim.y = input.moveY;
     player.x += input.moveX * CONFIG.player.speed * dt;
     player.y += input.moveY * CONFIG.player.speed * dt;
     const r = CONFIG.player.radius;
@@ -85,13 +129,24 @@ function update(dt) {
   player.muzzle -= dt;
   player.invuln -= dt;
 
-  // 开火
-  if (input.firing && player.fireCd <= 0 && bullets.length < CONFIG.bullet.max) {
-    const sx = player.x + player.aim.x * GUN_TIP;
-    const sy = player.y - 12 + player.aim.y * GUN_TIP;
-    bullets.push({ x: sx, y: sy, vx: player.aim.x * CONFIG.bullet.speed, vy: player.aim.y * CONFIG.bullet.speed });
-    player.fireCd = 1 / CONFIG.bullet.fireRate;
-    player.muzzle = 0.07;
+  // 自动锁定最近敌人 + 自动开火；无敌人时枪口跟随移动方向
+  const target = nearestMonster();
+  if (target) {
+    const gx = player.x, gy = player.y - 12;
+    const d = Math.hypot(target.x - gx, target.y - gy) || 1;
+    player.aim.x = (target.x - gx) / d;
+    player.aim.y = (target.y - gy) / d;
+    if (player.fireCd <= 0 && bullets.length < CONFIG.bullet.max) {
+      bullets.push({
+        x: gx + player.aim.x * GUN_TIP, y: gy + player.aim.y * GUN_TIP,
+        vx: player.aim.x * CONFIG.bullet.speed, vy: player.aim.y * CONFIG.bullet.speed,
+      });
+      player.fireCd = 1 / CONFIG.bullet.fireRate;
+      player.muzzle = 0.07;
+    }
+  } else if (player.moving) {
+    player.aim.x = input.moveX;
+    player.aim.y = input.moveY;
   }
 
   // 子弹
@@ -101,12 +156,12 @@ function update(dt) {
     b.y += b.vy * dt;
     if (b.x < -80 || b.x > W + 80 || b.y < -80 || b.y > H + 80) { bullets.splice(i, 1); continue; }
     for (const m of monsters) {
-      if (m.dying || m.hp <= 0) continue;
-      if (Math.hypot(b.x - m.x, b.y - m.y) < CONFIG.bullet.radius + CONFIG.goblin.radius) {
+      if (m.dying) continue;
+      if (Math.hypot(b.x - m.x, b.y - m.y) < CONFIG.bullet.radius + CONFIG.monsters[m.type].radius) {
         m.hp -= CONFIG.bullet.damage;
-        const kb = CONFIG.bullet.knockback, d = Math.hypot(b.vx, b.vy);
-        m.x += b.vx / d * kb;
-        m.y += b.vy / d * kb;
+        const kb = CONFIG.bullet.knockback, sp = Math.hypot(b.vx, b.vy);
+        m.x += b.vx / sp * kb;
+        m.y += b.vy / sp * kb;
         if (m.hp <= 0) { m.dying = 0.0001; m.animT = 0; kills++; }
         bullets.splice(i, 1);
         break;
@@ -119,31 +174,67 @@ function update(dt) {
   spawnTimer -= dt;
   const alive = monsters.filter(m => !m.dying).length;
   if (spawnTimer <= 0 && alive < monsterCap(s)) {
-    spawnMonster();
+    spawnMonster(s);
     spawnTimer = s.interval;
   }
 
-  // 怪物
-  const g = CONFIG.goblin;
+  // 怪物状态机: move 追近 → attack 挥击/吐弹(hitFrame 帧结算) → 冷却后再攻
   for (let i = monsters.length - 1; i >= 0; i--) {
     const m = monsters[i];
+    const cfg = CONFIG.monsters[m.type];
     m.animT += dt;
     if (m.dying) {
       m.dying += dt;
-      if (m.dying > g.deathFrames / g.deathFps + 0.3) monsters.splice(i, 1);
+      if (m.dying > cfg.anims.death.frames / cfg.anims.death.fps + 0.3) monsters.splice(i, 1);
       continue;
     }
     const dx = player.x - m.x, dy = player.y - m.y;
     const d = Math.hypot(dx, dy) || 1;
-    m.x += dx / d * g.speed * dt;
-    m.y += dy / d * g.speed * dt;
     m.flip = dx < 0;
-    m.hitCd -= dt;
-    if (d < CONFIG.player.radius + g.radius && m.hitCd <= 0 && player.invuln <= 0) {
-      player.hp -= g.damage;
-      player.invuln = CONFIG.player.invuln;
-      m.hitCd = g.hitCooldown;
-      if (player.hp <= 0) { player.hp = 0; gameOver(); }
+    m.atkCd -= dt;
+
+    if (m.state === 'attack') {
+      const a = cfg.anims.attack;
+      const frame = Math.floor(m.animT * a.fps);
+      if (!m.hitDone && frame >= cfg.hitFrame) {
+        m.hitDone = true;
+        if (cfg.behavior === 'melee') {
+          if (d < cfg.attackRange + CONFIG.player.radius + 12) hurtPlayer(cfg.damage);
+        } else {
+          const p = cfg.projectile;
+          eprojs.push({ type: m.type, x: m.x, y: m.y - 10, vx: dx / d * p.speed, vy: dy / d * p.speed, animT: 0 });
+        }
+      }
+      if (frame >= a.frames) { m.state = 'move'; m.animT = 0; m.atkCd = cfg.attackCooldown; }
+      continue;
+    }
+
+    // move 状态：近战贴脸即攻；远程保持距离，进入射程就停下吐弹
+    const inRange = d < cfg.attackRange;
+    if (inRange && m.atkCd <= 0) {
+      m.state = 'attack';
+      m.animT = 0;
+      m.hitDone = false;
+    } else if (!inRange || cfg.behavior === 'melee') {
+      m.x += dx / d * cfg.speed * dt;
+      m.y += dy / d * cfg.speed * dt;
+      m.idle = false;
+    } else {
+      m.idle = true;          // 远程怪在射程内等冷却
+    }
+  }
+
+  // 敌方投射物
+  for (let i = eprojs.length - 1; i >= 0; i--) {
+    const e = eprojs[i];
+    const p = CONFIG.monsters[e.type].projectile;
+    e.animT += dt;
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    if (e.x < -80 || e.x > W + 80 || e.y < -80 || e.y > H + 80) { eprojs.splice(i, 1); continue; }
+    if (Math.hypot(e.x - player.x, e.y - player.y) < p.radius + CONFIG.player.radius) {
+      hurtPlayer(CONFIG.monsters[e.type].damage);
+      eprojs.splice(i, 1);
     }
   }
 }
@@ -176,20 +267,26 @@ function drawArena() {
 }
 
 function drawMonster(m) {
-  const g = CONFIG.goblin;
-  const size = 150 * g.scale;
-  const img = m.dying ? goblinImg.death : goblinImg.run;
-  const frames = m.dying ? g.deathFrames : g.runFrames;
-  const fps = m.dying ? g.deathFps : g.runFps;
-  let f = Math.floor(m.animT * fps) % frames;
+  const cfg = CONFIG.monsters[m.type];
+  const size = 150 * cfg.scale;
+  let a, t;
+  if (m.dying) { a = cfg.anims.death; t = m.dying; }
+  else if (m.state === 'attack') { a = cfg.anims.attack; t = m.animT; }
+  else if (m.idle && cfg.anims.idle) { a = cfg.anims.idle; t = m.animT; }
+  else { a = cfg.anims.move; t = m.animT; }
+
+  let f;
+  ctx.save();
   if (m.dying) {
-    f = Math.min(Math.floor(m.dying * g.deathFps), frames - 1);
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, 1 - Math.max(0, m.dying - frames / g.deathFps) / 0.3);
+    f = Math.min(Math.floor(t * a.fps), a.frames - 1);
+    ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - a.frames / a.fps) / 0.3);
+  } else if (m.state === 'attack') {
+    f = Math.min(Math.floor(t * a.fps), a.frames - 1);
   } else {
-    ctx.save();
+    f = Math.floor(t * a.fps) % a.frames;
   }
-  ctx.translate(m.x, m.y - g.bodyOffsetY * g.scale);
+  const img = images[m.type][m.dying ? 'death' : (m.state === 'attack' ? 'attack' : (m.idle && cfg.anims.idle ? 'idle' : 'move'))];
+  ctx.translate(m.x, m.y - cfg.bodyOffsetY * cfg.scale);
   if (m.flip) ctx.scale(-1, 1);
   ctx.drawImage(img, f * 150, 0, 150, 150, -size / 2, -size / 2, size, size);
   ctx.restore();
@@ -200,6 +297,18 @@ function drawMonster(m) {
     ctx.fillStyle = C.hpBar;
     ctx.fillRect(m.x - 18, m.y - 48, 36 * m.hp / m.maxHp, 4);
   }
+}
+
+function drawEproj(e) {
+  const p = CONFIG.monsters[e.type].projectile;
+  const img = images[e.type].projectile;
+  const f = Math.floor(e.animT * p.fps) % p.frames;
+  const size = p.size * p.scale;
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  if (e.vx < 0) ctx.scale(-1, 1);
+  ctx.drawImage(img, f * p.size, 0, p.size, p.size, -size / 2, -size / 2, size, size);
+  ctx.restore();
 }
 
 function drawHUD() {
@@ -245,32 +354,20 @@ function drawPauseBtn() {
 }
 function inRect(p, r) { return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h; }
 
-const FIRE_BTN = { x: W - 110, y: H - 110, r: 52 };
 function drawTouchControls() {
-  if (!input.touchSeen || state !== 'playing') return;
-  if (input.joystick) {
-    const j = input.joystick;
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(j.ox, j.oy, 52, 0, Math.PI * 2);
-    ctx.stroke();
-    const dx = j.cx - j.ox, dy = j.cy - j.oy;
-    const d = Math.hypot(dx, dy), cl = Math.min(d, 52);
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    ctx.arc(j.ox + (d ? dx / d * cl : 0), j.oy + (d ? dy / d * cl : 0), 24, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  const f = FIRE_BTN;
-  ctx.fillStyle = input.firing ? 'rgba(239,159,39,0.45)' : 'rgba(255,255,255,0.15)';
+  if (!input.touchSeen || state !== 'playing' || !input.joystick) return;
+  const j = input.joystick;
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+  ctx.arc(j.ox, j.oy, 52, 0, Math.PI * 2);
+  ctx.stroke();
+  const dx = j.cx - j.ox, dy = j.cy - j.oy;
+  const d = Math.hypot(dx, dy), cl = Math.min(d, 52);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.arc(j.ox + (d ? dx / d * cl : 0), j.oy + (d ? dy / d * cl : 0), 24, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = C.hud;
-  ctx.font = '16px -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('射击', f.x, f.y + 6);
 }
 
 function drawOverlay(title, lines, btnText) {
@@ -300,13 +397,15 @@ function draw() {
   if (state === 'title') {
     drawOverlay('火柴人：怪物围城', [
       '怪物会从四面八方涌来，活下去！',
-      '移动：方向键 / WASD（手机：左半屏摇杆）',
-      '射击：J / 空格 按住连发（手机：右下角按钮）',
+      '自动锁定最近的怪物射击，你只管走位',
+      '移动：方向键 / WASD（手机：任意位置拖动摇杆）',
+      '小心蘑菇怪的孢子弹和骷髅的重剑',
     ], '开始游戏');
     return;
   }
 
   monsters.forEach(drawMonster);
+  eprojs.forEach(drawEproj);
   bullets.forEach(b => {
     ctx.fillStyle = C.bullet;
     ctx.beginPath();
@@ -362,6 +461,6 @@ function loop(now) {
 }
 
 let loadedImgs = 0;
-[goblinImg.run, goblinImg.death].forEach(img => {
-  img.onload = () => { if (++loadedImgs === 2) { reset(); requestAnimationFrame(loop); } };
+pending.forEach(img => {
+  img.onload = () => { if (++loadedImgs === pending.length) { reset(); requestAnimationFrame(loop); } };
 });

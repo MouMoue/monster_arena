@@ -1,15 +1,13 @@
-// 输入抽象 —— PRD 4.8：键盘 + 触屏统一为「移动向量 + 开火信号」，游戏逻辑不感知来源
-// 触屏：左半屏动态摇杆（按下处为原点），右半屏按住开火；必须支持多点触控
+// 输入抽象 —— PRD 4.8：键盘 + 触屏统一为「移动向量」，游戏逻辑不感知来源
+// 攻击为自动锁定最近敌人，无需开火键；触屏在任意位置按下即生成动态摇杆
 class Input {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = {};
     this.moveX = 0;
     this.moveY = 0;
-    this.firing = false;
     this.touchSeen = false;          // 检测到触屏才显示虚拟控件
     this.joystick = null;            // {id, ox, oy, cx, cy}
-    this.firePointers = new Set();
     this.taps = [];                  // 本帧的点按事件 [{x,y}]，UI 用
     this.keyPresses = [];            // 本帧的按键 code 列表，UI 用
 
@@ -39,13 +37,7 @@ class Input {
     this.taps.push(p);
     if (e.pointerType === 'touch') {
       this.touchSeen = true;
-      if (p.x < CONFIG.W / 2) {
-        if (!this.joystick) this.joystick = { id: e.pointerId, ox: p.x, oy: p.y, cx: p.x, cy: p.y };
-      } else {
-        this.firePointers.add(e.pointerId);
-      }
-    } else if (e.pointerType === 'mouse') {
-      this.firePointers.add(e.pointerId); // 鼠标按住也可开火
+      if (!this.joystick) this.joystick = { id: e.pointerId, ox: p.x, oy: p.y, cx: p.x, cy: p.y };
     }
   }
 
@@ -59,10 +51,9 @@ class Input {
 
   onUp(e) {
     if (this.joystick && e.pointerId === this.joystick.id) this.joystick = null;
-    this.firePointers.delete(e.pointerId);
   }
 
-  // 每帧调用：汇总键盘+触屏为统一信号
+  // 每帧调用：汇总键盘+触屏为统一移动向量
   poll() {
     let mx = 0, my = 0;
     if (this.keys['ArrowLeft'] || this.keys['KeyA']) mx -= 1;
@@ -80,7 +71,6 @@ class Input {
     const len = Math.hypot(mx, my);
     this.moveX = len > 0 ? mx / len : 0;
     this.moveY = len > 0 ? my / len : 0;
-    this.firing = this.firePointers.size > 0 || !!this.keys['KeyJ'] || !!this.keys['Space'];
   }
 
   // 帧末清空一次性事件
