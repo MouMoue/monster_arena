@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>素材浏览器 - monster_arena</title>
+<style>
+  :root {
+    --bg: #1a1c22; --panel: #242730; --line: #3a3e4a;
+    --text: #e8e9ec; --dim: #9aa0ae; --accent: #ffb937;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "PingFang SC", sans-serif; }
+  .checker { background: repeating-conic-gradient(#2e323d 0% 25%, #262a33 0% 50%) 0 0 / 16px 16px; }
+
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 16px; color: var(--accent); margin-right: 4px; }
+  #search { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 6px 10px; width: 220px; outline: none; }
+  #search:focus { border-color: var(--accent); }
+  #count { color: var(--dim); font-size: 12px; margin-left: auto; }
+  .groups { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .groups button { background: var(--bg); border: 1px solid var(--line); color: var(--dim); border-radius: 20px; padding: 3px 12px; cursor: pointer; font-size: 12px; }
+  .groups button.on { background: var(--accent); border-color: var(--accent); color: #1a1c22; font-weight: 600; }
+
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; cursor: pointer; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .thumb { height: 110px; display: flex; align-items: center; justify-content: center; }
+  .thumb img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  .info { padding: 6px 8px; border-top: 1px solid var(--line); }
+  .info .name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .info .meta { font-size: 11px; color: var(--dim); }
+
+  /* 弹窗 */
+  #modal { display: none; position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.7); }
+  #modal.open { display: flex; align-items: center; justify-content: center; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(92vw, 1000px); max-height: 92vh; display: flex; flex-direction: column; }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .panel-head .path { font-size: 13px; color: var(--accent); word-break: break-all; }
+  .panel-head .dims { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  #close { margin-left: auto; background: none; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 16px; }
+  .view { flex: 1; overflow: auto; display: flex; align-items: safe center; justify-content: safe center; min-height: 200px; padding: 16px; }
+  .view canvas { image-rendering: pixelated; }
+  .ctrl { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  .ctrl .seg { display: flex; gap: 4px; align-items: center; }
+  .ctrl button { background: var(--bg); border: 1px solid var(--line); color: var(--dim); border-radius: 5px; padding: 2px 9px; cursor: pointer; font-size: 12px; }
+  .ctrl button.on { background: var(--accent); border-color: var(--accent); color: #1a1c22; font-weight: 600; }
+  .ctrl input[type=range] { width: 90px; accent-color: var(--accent); }
+  .ctrl .val { color: var(--text); min-width: 30px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>素材浏览器</h1>
+    <input id="search" type="search" placeholder="搜索文件名 / 路径…">
+    <span id="count"></span>
+  </div>
+  <div class="groups" id="groups"></div>
+</header>
+<div id="grid"></div>
+
+<div id="modal">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="path" id="m-path"></span>
+      <span class="dims" id="m-dims"></span>
+      <button id="close" title="关闭 (Esc)">×</button>
+    </div>
+    <div class="view checker"><canvas id="m-canvas"></canvas></div>
+    <div class="ctrl">
+      <div class="seg">缩放 <input id="zoom" type="range" min="1" max="10" value="2"><span class="val" id="zoom-v">2x</span></div>
+      <div class="seg">帧尺寸 <span id="fsizes"></span></div>
+      <div class="seg"><button id="grid-btn">网格</button></div>
+      <div class="seg"><button id="play-btn">▶ 播放动画</button></div>
+      <div class="seg" id="anim-ctrl" style="display:none">
+        行 <button id="row-prev">‹</button><span class="val" id="row-v"></span><button id="row-next">›</button>
+        FPS <input id="fps" type="range" min="2" max="24" value="10"><span class="val" id="fps-v">10</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="asset_manifest.js"></script>
+<script>
+const GROUP_ORDER = ['tiny_swords/terrain', 'tiny_swords/deco', 'tiny_swords/factions', 'tiny_swords/resources',
+                     'tiny_swords/effects', 'tiny_swords/ui', 'monsters', 'pets', 'tiles', 'effects'];
+const items = window.ASSET_MANIFEST.map(it => {
+  const p = it.path.split('/');
+  it.group = p[1] === 'tiny_swords' && p.length > 3 ? p[1] + '/' + p[2] : p[1];
+  return it;
+});
+
+const state = { group: 'all', q: '' };
+const $ = id => document.getElementById(id);
+
+// 分类按钮
+const groups = [...new Set(items.map(i => i.group))]
+  .sort((a, b) => (GROUP_ORDER.indexOf(a) + 99 >>> 0) - (GROUP_ORDER.indexOf(b) + 99 >>> 0));
+function renderGroups() {
+  $('groups').innerHTML = '';
+  for (const g of ['all', ...groups]) {
+    const n = g === 'all' ? items.length : items.filter(i => i.group === g).length;
+    const b = document.createElement('button');
+    b.textContent = (g === 'all' ? '全部' : g) + ' ' + n;
+    b.className = state.group === g ? 'on' : '';
+    b.onclick = () => { state.group = g; renderGroups(); renderGrid(); };
+    $('groups').appendChild(b);
+  }
+}
+
+// 卡片网格
+function filtered() {
+  return items.filter(i =>
+    (state.group === 'all' || i.group === state.group) &&
+    (!state.q || i.path.toLowerCase().includes(state.q)));
+}
+function renderGrid() {
+  const list = filtered();
+  $('count').textContent = `${list.length} / ${items.length} 张`;
+  $('grid').innerHTML = '';
+  for (const it of list) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="thumb checker"><img src="${it.path}" loading="lazy" alt=""></div>
+      <div class="info">
+        <div class="name" title="${it.path}">${it.path.split('/').pop()}</div>
+        <div class="meta">${it.w}×${it.h} · ${it.kb}KB</div>
+      </div>`;
+    card.onclick = () => openModal(it);
+    $('grid').appendChild(card);
+  }
+}
+$('search').oninput = e => { state.q = e.target.value.trim().toLowerCase(); renderGrid(); };
+
+// ===== 弹窗预览 =====
+const m = { it: null, img: null, zoom: 2, fsize: 64, grid: false, playing: false, row: 0, col: 0, fps: 10, timer: null };
+const cv = $('m-canvas'), ctx = cv.getContext('2d');
+
+function detectFrame(w, h) {
+  for (const s of [192, 128, 96, 64, 48, 32]) if (w % s === 0 && h % s === 0) return s;
+  if (w % h === 0) return h;  // 横向条带
+  return Math.min(w, h);
+}
+function frameSizes(w, h) {
+  return [32, 48, 64, 96, 128, 192, 256].filter(s => w % s === 0 && h % s === 0);
+}
+
+function openModal(it) {
+  m.it = it; m.zoom = it.w > 800 ? 1 : 2; m.grid = false; m.row = 0; m.col = 0;
+  stopAnim();
+  $('m-path').textContent = it.path;
+  m.img = new Image();
+  m.img.onload = () => {
+    m.fsize = detectFrame(it.w, it.h);
+    const cols = Math.floor(it.w / m.fsize), rows = Math.floor(it.h / m.fsize);
+    $('m-dims').textContent = `${it.w}×${it.h} · ${it.kb}KB · ${cols}×${rows} 帧格`;
+    renderFsizes();
+    syncCtrl();
+    drawStill();
+  };
+  m.img.src = it.path;
+  $('modal').classList.add('open');
+}
+function closeModal() { stopAnim(); $('modal').classList.remove('open'); }
+$('close').onclick = closeModal;
+$('modal').onclick = e => { if (e.target === $('modal')) closeModal(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function renderFsizes() {
+  const box = $('fsizes'); box.innerHTML = '';
+  for (const s of frameSizes(m.it.w, m.it.h)) {
+    const b = document.createElement('button');
+    b.textContent = s;
+    b.className = s === m.fsize ? 'on' : '';
+    b.onclick = () => { m.fsize = s; m.row = 0; m.col = 0; renderFsizes(); syncCtrl(); m.playing ? null : drawStill(); };
+    box.appendChild(b);
+  }
+}
+function syncCtrl() {
+  $('zoom-v').textContent = m.zoom + 'x';
+  $('zoom').value = m.zoom;
+  $('grid-btn').className = m.grid ? 'on' : '';
+  $('play-btn').textContent = m.playing ? '⏸ 停止' : '▶ 播放动画';
+  $('play-btn').className = m.playing ? 'on' : '';
+  $('anim-ctrl').style.display = m.playing ? 'flex' : 'none';
+  $('row-v').textContent = (m.row + 1) + '/' + Math.floor(m.it.h / m.fsize);
+  $('fps-v').textContent = m.fps;
+}
+
+function drawStill() {
+  const { w, h } = m.it, z = m.zoom;
+  cv.width = w * z; cv.height = h * z;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(m.img, 0, 0, w * z, h * z);
+  if (m.grid) {
+    ctx.strokeStyle = 'rgba(255,185,55,.55)';
+    for (let x = 0; x <= w; x += m.fsize) { ctx.beginPath(); ctx.moveTo(x * z + .5, 0); ctx.lineTo(x * z + .5, h * z); ctx.stroke(); }
+    for (let y = 0; y <= h; y += m.fsize) { ctx.beginPath(); ctx.moveTo(0, y * z + .5); ctx.lineTo(w * z, y * z + .5); ctx.stroke(); }
+  }
+}
+function drawFrame() {
+  const s = m.fsize, z = Math.max(m.zoom, 3);
+  cv.width = s * z; cv.height = s * z;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(m.img, m.col * s, m.row * s, s, s, 0, 0, s * z, s * z);
+}
+function startAnim() {
+  m.playing = true;
+  m.timer = setInterval(() => {
+    m.col = (m.col + 1) % Math.max(1, Math.floor(m.it.w / m.fsize));
+    drawFrame();
+  }, 1000 / m.fps);
+  syncCtrl(); drawFrame();
+}
+function stopAnim() {
+  m.playing = false;
+  if (m.timer) clearInterval(m.timer), m.timer = null;
+}
+
+$('zoom').oninput = e => { m.zoom = +e.target.value; syncCtrl(); m.playing ? drawFrame() : drawStill(); };
+$('grid-btn').onclick = () => { m.grid = !m.grid; syncCtrl(); if (!m.playing) drawStill(); };
+$('play-btn').onclick = () => { m.playing ? (stopAnim(), syncCtrl(), drawStill()) : startAnim(); };
+$('row-prev').onclick = () => { const r = Math.floor(m.it.h / m.fsize); m.row = (m.row - 1 + r) % r; syncCtrl(); drawFrame(); };
+$('row-next').onclick = () => { const r = Math.floor(m.it.h / m.fsize); m.row = (m.row + 1) % r; syncCtrl(); drawFrame(); };
+$('fps').oninput = e => { m.fps = +e.target.value; syncCtrl(); if (m.playing) { stopAnim(); startAnim(); } };
+
+renderGroups();
+renderGrid();
+</script>
+</body>
+</html>

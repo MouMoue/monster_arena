@@ -6,6 +6,7 @@ const meta = {
   xp: 0,
   owned: ['pistol'],       // 已购武器
   ownedEquip: [],          // 已购装备（被动叠加生效）
+  ownedPets: [],           // 已购精灵（全部跟随出战）
   weapon: 'pistol',        // 当前装备的武器
   difficulty: 'normal',
 };
@@ -53,10 +54,10 @@ function effectiveStats() {
   };
 }
 
-// 商城操作：返回提示文案（购买武器自动装备）
+// 商城操作（购买武器自动装备；装备/精灵购买即生效）
 function shopAction(kind, id) {
-  const item = kind === 'weapon' ? CONFIG.weapons[id] : CONFIG.equipment[id];
-  const ownedList = kind === 'weapon' ? meta.owned : meta.ownedEquip;
+  const item = kind === 'weapon' ? CONFIG.weapons[id] : kind === 'pet' ? CONFIG.pets[id] : CONFIG.equipment[id];
+  const ownedList = kind === 'weapon' ? meta.owned : kind === 'pet' ? meta.ownedPets : meta.ownedEquip;
   if (levelInfo().lv < item.level) return null;
   if (ownedList.includes(id)) {
     if (kind === 'weapon' && meta.weapon !== id) { meta.weapon = id; saveMeta(); }
