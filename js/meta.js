@@ -6,7 +6,8 @@ const meta = {
   xp: 0,
   owned: ['pistol'],       // 已购武器
   ownedEquip: [],          // 已购装备（被动叠加生效）
-  ownedPets: [],           // 已购精灵（全部跟随出战）
+  ownedPets: [],           // 已购精灵
+  activePet: null,         // 出战精灵（每次只能带一只）
   mercTier: { pawn: -1, warrior: -1, archer: -1 },   // 佣兵档位（-1 未雇佣，0-3 = 蓝/黄/紫/红）
   weapon: 'pistol',        // 当前装备的武器
   difficulty: 'normal',
@@ -21,6 +22,9 @@ function loadMeta() {
   if (!CONFIG.weapons[meta.weapon]) meta.weapon = 'pistol';
   if (!CONFIG.difficulties[meta.difficulty]) meta.difficulty = 'normal';
   if (!meta.mercTier) meta.mercTier = { pawn: -1, warrior: -1, archer: -1 };
+  meta.ownedPets = meta.ownedPets.filter(id => CONFIG.pets[id]);
+  if (meta.activePet && !meta.ownedPets.includes(meta.activePet)) meta.activePet = null;
+  if (!meta.activePet && meta.ownedPets.length) meta.activePet = meta.ownedPets[0];
 }
 function saveMeta() {
   localStorage.setItem(SAVE_KEY, JSON.stringify(meta));
@@ -74,12 +78,14 @@ function shopAction(kind, id) {
   if (levelInfo().lv < item.level) return null;
   if (ownedList.includes(id)) {
     if (kind === 'weapon' && meta.weapon !== id) { meta.weapon = id; saveMeta(); }
+    if (kind === 'pet' && meta.activePet !== id) { meta.activePet = id; saveMeta(); }   // 切换出战精灵
     return null;
   }
   if (meta.coins < item.price) return null;
   meta.coins -= item.price;
   ownedList.push(id);
   if (kind === 'weapon') meta.weapon = id;
+  if (kind === 'pet') meta.activePet = id;       // 新买的精灵自动出战
   saveMeta();
   return null;
 }

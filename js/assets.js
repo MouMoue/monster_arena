@@ -22,9 +22,10 @@ for (const [type, cfg] of Object.entries(CONFIG.monsters)) {
 
 // ---- Scarloxy 精灵 + 元素特效 ----
 const petImgs = {}, petIcons = {}, effectImgs = {};
-for (const [id, p] of Object.entries(CONFIG.pets)) {
-  petImgs[id] = loadImg('assets/pets/' + p.sheet);
-  petIcons[id] = loadImg('assets/pets/icons/' + p.icon);
+for (const id of Object.keys(CONFIG.pets)) {
+  const file = id[0].toUpperCase() + id.slice(1) + '.png';
+  petImgs[id] = loadImg('assets/pets/' + file);
+  petIcons[id] = loadImg('assets/pets/icons/' + file);
 }
 for (const [id, e] of Object.entries(CONFIG.effects)) effectImgs[id] = loadImg('assets/effects/' + e.file);
 

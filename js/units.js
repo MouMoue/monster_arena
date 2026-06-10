@@ -34,9 +34,9 @@ function throwDynamite(sx, sy, tx, ty) {
   const dur = Math.hypot(tx - sx, ty - sy) / CONFIG.dynamite.speed;
   dynamites.push({ sx, sy, tx, ty, t: 0, dur: Math.max(0.5, dur) });
 }
-function fireArrow(x, y, tx, ty, dmg) {
+function fireArrow(x, y, tx, ty, dmg, speed = 720) {
   const d = Math.hypot(tx - x, ty - y) || 1;
-  arrows.push({ x, y, vx: (tx - x) / d * 520, vy: (ty - y) / d * 520, dmg, t: 0 });
+  arrows.push({ x, y, vx: (tx - x) / d * speed, vy: (ty - y) / d * speed, dmg, t: 0 });
 }
 
 function collectPickup(p, byText) {
@@ -284,8 +284,8 @@ function drawBoom(b) {
 function drawArrowE(a) {
   ctx.save();
   ctx.translate(a.x, a.y);
-  ctx.rotate(Math.atan2(a.vy, a.vx) + Math.PI / 2);   // 素材箭头朝上
-  ctx.drawImage(tswArrow, -16, -32, 32, 64);
+  ctx.rotate(Math.atan2(a.vy, a.vx));   // 素材箭头朝右，直接按飞行方向旋转
+  ctx.drawImage(tswArrow, 0, 0, 64, 64, -26, -26, 52, 52);
   ctx.restore();
 }
 

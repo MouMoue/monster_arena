@@ -35,18 +35,38 @@ const CONFIG = {
     amulet:  { name: '守护护符', desc: '受击无敌 +50%',    price: 800, level: 6, effect: { invulnMul: 0.5 } },
   },
 
+  // 精灵图鉴（Scarloxy 全 16 只）：每次只能带一只出战（商城里点击已拥有的切换出战）
+  // 攻击方式：朝目标发射元素技能弹，命中爆发；ice 减速 / explosion 范围溅射 / splash 击退 / scratch 高频
   pets: {
-    sparchu:  { name: '火精灵', desc: '火焰爆发 · 伤害18',       price: 500,  level: 3, damage: 18, range: 340, cooldown: 1.3, effect: 'fire',  sheet: 'Sparchu.png',  icon: 'Sparchu.png',  scale: 0.55 },
-    cleaf:    { name: '草精灵', desc: '藤叶切割 · 伤害26',       price: 900,  level: 5, damage: 26, range: 340, cooldown: 1.6, effect: 'green', sheet: 'Cleaf.png',    icon: 'Cleaf.png',    scale: 0.55 },
-    friolera: { name: '冰精灵', desc: '寒冰冻结 · 伤害22+减速',  price: 1500, level: 7, damage: 22, range: 340, cooldown: 1.5, effect: 'ice',   sheet: 'Friolera.png', icon: 'Friolera.png', scale: 0.55, slow: 2.0 },
+    larvea:      { name: '拉维虫',   element: '草', price: 300,  level: 2,  damage: 14, cooldown: 1.2, effect: 'green' },
+    plumette:    { name: '小绒羽',   element: '风', price: 450,  level: 3,  damage: 12, cooldown: 0.9, effect: 'scratch' },
+    sparchu:     { name: '斯帕丘',   element: '火', price: 500,  level: 3,  damage: 18, cooldown: 1.3, effect: 'fire' },
+    finsta:      { name: '小水鳍',   element: '水', price: 650,  level: 4,  damage: 16, cooldown: 1.2, effect: 'splash', kb: 14 },
+    cleaf:       { name: '克里夫',   element: '草', price: 900,  level: 5,  damage: 26, cooldown: 1.6, effect: 'green' },
+    pouch:       { name: '帕奇袋',   element: '风', price: 1000, level: 5,  damage: 20, cooldown: 1.1, effect: 'scratch' },
+    cindrill:    { name: '辛德钻',   element: '火', price: 1200, level: 6,  damage: 30, cooldown: 1.5, effect: 'fire' },
+    gulfin:      { name: '高尔芬',   element: '水', price: 1300, level: 6,  damage: 24, cooldown: 1.3, effect: 'splash', kb: 18 },
+    jacana:      { name: '贾卡纳',   element: '水', price: 1500, level: 7,  damage: 22, cooldown: 1.0, effect: 'splash', kb: 12 },
+    friolera:    { name: '芙琳拉',   element: '冰', price: 1500, level: 7,  damage: 22, cooldown: 1.5, effect: 'ice', slow: 2.0 },
+    ivieron:     { name: '艾维龙',   element: '草', price: 1800, level: 8,  damage: 34, cooldown: 1.5, effect: 'green' },
+    pluma:       { name: '普鲁玛',   element: '风', price: 2200, level: 9,  damage: 30, cooldown: 0.9, effect: 'scratch' },
+    charmadillo: { name: '查玛甲',   element: '火', price: 2600, level: 10, damage: 45, cooldown: 1.8, effect: 'fire' },
+    draem:       { name: '德雷姆',   element: '爆', price: 3000, level: 11, damage: 36, cooldown: 1.4, effect: 'explosion', aoe: 70 },
+    finiette:    { name: '菲尼特',   element: '水', price: 3500, level: 12, damage: 42, cooldown: 1.5, effect: 'splash', kb: 22 },
+    atrox:       { name: '阿特罗斯', element: '爆', price: 4200, level: 13, damage: 55, cooldown: 1.6, effect: 'explosion', aoe: 85 },
   },
   petSheet: { frame: 192, cols: 4, idleFps: 6, attackFps: 10, castFrame: 2 },
-  petSlots: [[-52, 26], [52, 26], [-84, -16]],
+  petSlots: [[-52, 26]],          // 单精灵出战
+  petRange: 360,
+  petProj: { speed: 470, radius: 14, life: 1.3 },
 
   effects: {
-    fire:  { file: 'fire.png',  frames: 4, size: 192, fps: 12, scale: 0.75, dmgFrame: 1 },
-    green: { file: 'green.png', frames: 4, size: 192, fps: 12, scale: 0.75, dmgFrame: 1 },
-    ice:   { file: 'ice.png',   frames: 4, size: 192, fps: 12, scale: 0.75, dmgFrame: 1 },
+    fire:      { file: 'fire.png',      frames: 4, size: 192, fps: 14, scale: 0.75 },
+    green:     { file: 'green.png',     frames: 4, size: 192, fps: 14, scale: 0.75 },
+    ice:       { file: 'ice.png',       frames: 4, size: 192, fps: 14, scale: 0.75 },
+    scratch:   { file: 'scratch.png',   frames: 4, size: 192, fps: 16, scale: 0.7 },
+    splash:    { file: 'splash.png',    frames: 4, size: 192, fps: 14, scale: 0.75 },
+    explosion: { file: 'explosion.png', frames: 4, size: 192, fps: 14, scale: 0.85 },
   },
 
   // 佣兵（Tiny Swords 骑士兵种，4 色 = 4 档强度，购买高档自动替换出战）
@@ -77,6 +97,7 @@ const CONFIG = {
         { price: 500,  level: 4 }, { price: 1000, level: 7 },
         { price: 2000, level: 10 }, { price: 3600, level: 13 },
       ],
+      arrowSpeed: 720,
       attack: { row: 4, frames: 8, fps: 14, hitFrame: 3 },
     },
   },

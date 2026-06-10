@@ -23,7 +23,7 @@ resize();
 
 // ---------- 游戏状态 ----------
 let state = 'title';
-let player, bullets, monsters, eprojs, pets, effects, floaters;
+let player, bullets, monsters, eprojs, pets, petProjs, effects, floaters;
 let playTime, kills, runCoins, spawnTimer, stats, worldT = 0;
 let shopTab = 'weapon';
 let lastTap = null;
@@ -48,11 +48,12 @@ function reset() {
   eprojs = [];
   effects = [];
   floaters = [];
-  pets = meta.ownedPets.slice(0, CONFIG.petSlots.length).map((id, i) => ({
+  pets = (meta.activePet ? [meta.activePet] : []).map((id, i) => ({   // 单精灵出战
     id, slot: i,
     x: player.x + CONFIG.petSlots[i][0], y: player.y + CONFIG.petSlots[i][1],
-    state: 'idle', animT: Math.random(), atkCd: 0.5 + i * 0.4, casted: false, target: null, flip: false,
+    state: 'idle', animT: Math.random(), atkCd: 0.5, casted: false, target: null, flip: false,
   }));
+  petProjs = [];
   playTime = 0;
   kills = 0;
   runCoins = 0;
@@ -285,7 +286,7 @@ function update(dt) {
         if (Math.abs(dx) > 3) pet.flip = dx < 0;
       }
       if (pet.atkCd <= 0) {
-        const t = nearestMonster(pet.x, pet.y, cfg.range);
+        const t = nearestMonster(pet.x, pet.y, CONFIG.petRange);
         if (t) {
           pet.state = 'attack';
           pet.animT = 0;
@@ -299,29 +300,53 @@ function update(dt) {
       if (!pet.casted && frame >= ps.castFrame) {
         pet.casted = true;
         const t = pet.target;
-        if (t && !t.dying) {
-          effects.push({ kind: cfg.effect, target: t, x: t.x, y: t.y - 20, animT: 0, dmg: cfg.damage, slow: cfg.slow || 0, done: false });
+        if (t && !t.dying) {       // 朝目标发射元素技能弹
+          const sx = pet.x, sy = pet.y - 28;
+          const d = Math.hypot(t.x - sx, t.y - sy) || 1;
+          const sp = CONFIG.petProj.speed;
+          petProjs.push({
+            kind: cfg.effect, x: sx, y: sy, vx: (t.x - sx) / d * sp, vy: (t.y - sy) / d * sp,
+            dmg: cfg.damage, slow: cfg.slow || 0, kb: cfg.kb || 0, aoe: cfg.aoe || 0, t: 0,
+          });
         }
       }
       if (frame >= ps.cols) { pet.state = 'idle'; pet.animT = 0; pet.atkCd = cfg.cooldown; pet.target = null; }
     }
   }
 
-  // 精灵元素特效
+  // 精灵技能弹：飞行 → 命中爆发（爆系溅射 / 水系击退 / 冰系减速）
+  for (let i = petProjs.length - 1; i >= 0; i--) {
+    const p = petProjs[i];
+    p.t += dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (p.t > CONFIG.petProj.life) { petProjs.splice(i, 1); continue; }
+    for (const m of monsters) {
+      if (m.dying) continue;
+      if (Math.hypot(p.x - m.x, p.y - m.y) < CONFIG.petProj.radius + CONFIG.monsters[m.type].radius) {
+        const sp = Math.hypot(p.vx, p.vy);
+        damageMonster(m, p.dmg, p.kb ? p.vx / sp * p.kb : 0, p.kb ? p.vy / sp * p.kb : 0);
+        if (p.slow && !m.dying) m.slowT = p.slow;
+        if (p.aoe) {
+          for (const o of monsters) {
+            if (o === m || o.dying) continue;
+            if (Math.hypot(o.x - m.x, o.y - m.y) < p.aoe) damageMonster(o, Math.round(p.dmg * 0.6), 0, 0);
+          }
+        }
+        effects.push({ kind: p.kind, target: m, x: m.x, y: m.y - 20, animT: 0 });   // 命中爆发动画
+        petProjs.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  // 命中爆发动画（纯视觉，跟随目标）
   for (let i = effects.length - 1; i >= 0; i--) {
     const e = effects[i];
     const cfg = CONFIG.effects[e.kind];
     e.animT += dt;
     if (e.target && !e.target.dying) { e.x = e.target.x; e.y = e.target.y - 20; }
-    const frame = Math.floor(e.animT * cfg.fps);
-    if (!e.done && frame >= cfg.dmgFrame) {
-      e.done = true;
-      if (e.target && !e.target.dying) {
-        damageMonster(e.target, e.dmg, 0, 0);
-        if (e.slow && !e.target.dying) e.target.slowT = e.slow;
-      }
-    }
-    if (frame >= cfg.frames) effects.splice(i, 1);
+    if (Math.floor(e.animT * cfg.fps) >= cfg.frames) effects.splice(i, 1);
   }
 
   // 刷怪 + 远端清理
@@ -578,9 +603,8 @@ function drawMonster(m) {
 }
 
 function drawPet(pet) {
-  const cfg = CONFIG.pets[pet.id];
   const ps = CONFIG.petSheet;
-  const size = ps.frame * cfg.scale;
+  const size = ps.frame * 0.55;
   const row = pet.state === 'attack' ? 1 : 0;
   const fps = pet.state === 'attack' ? ps.attackFps : ps.idleFps;
   let f = Math.floor(pet.animT * fps);
@@ -609,6 +633,17 @@ function drawEffectE(e) {
   const f = Math.min(Math.floor(e.animT * cfg.fps), cfg.frames - 1);
   const size = cfg.size * cfg.scale;
   ctx.drawImage(effectImgs[e.kind], f * cfg.size, 0, cfg.size, cfg.size, e.x - size / 2, e.y - size / 2, size, size);
+}
+
+// 精灵技能弹：元素特效首帧做弹体，朝飞行方向旋转 + 轻微脉动
+function drawPetProj(p) {
+  const cfg = CONFIG.effects[p.kind];
+  const s = cfg.size * (0.42 + Math.sin(p.t * 22) * 0.05);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(Math.atan2(p.vy, p.vx));
+  ctx.drawImage(effectImgs[p.kind], 0, 0, cfg.size, cfg.size, -s / 2, -s / 2, s, s);
+  ctx.restore();
 }
 
 function pointerAt(idx, x, y, s = 36) {
@@ -648,6 +683,7 @@ function drawWorldScene() {
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
     ctx.fill();
   });
+  petProjs.forEach(drawPetProj);
   effects.forEach(drawEffectE);
   fireFxs.forEach(drawFireFxE);
   booms.forEach(drawBoom);
@@ -783,7 +819,7 @@ function drawTitle() {
   ctx.font = '14px -apple-system, sans-serif';
   ctx.fillText(`${meta.coins}`, W / 2 - 142, H - 28);
   ctx.fillStyle = C.hudDim;
-  ctx.fillText(`Lv.${li.lv}　武器：${CONFIG.weapons[meta.weapon].name}　精灵 ${meta.ownedPets.length}/3　佣兵 ${Object.values(meta.mercTier).filter(t => t >= 0).length}/3`, W / 2 - 110, H - 28);
+  ctx.fillText(`Lv.${li.lv}　武器：${CONFIG.weapons[meta.weapon].name}　精灵 ${meta.ownedPets.length}/16${meta.activePet ? '·出战' + CONFIG.pets[meta.activePet].name : ''}　佣兵 ${Object.values(meta.mercTier).filter(t => t >= 0).length}/3`, W / 2 - 110, H - 28);
 }
 
 // ---------- 商城（四页签：武器/装备/精灵/佣兵） ----------
@@ -859,30 +895,60 @@ function drawShop() {
       shopRows.push(r);
       ry += 82;
     }
+  } else if (shopTab === 'pet') {
+    // 16 只精灵两列网格；点击已拥有的切换出战（每次只能带一只）
+    const colW = (rw - 16) / 2;
+    Object.entries(CONFIG.pets).forEach(([id, item], i) => {
+      const col = i % 2, rowI = Math.floor(i / 2);
+      const r = { x: rx + col * (colW + 16), y: 142 + rowI * 46, w: colW, h: 42, kind: 'pet', id };
+      const owned = meta.ownedPets.includes(id);
+      const active = meta.activePet === id;
+      const locked = li.lv < item.level;
+      cardBg(r, active ? 'equipped' : locked ? 'locked' : 'normal', uiPressedId === 'row_pet_' + id);
+      ctx.save();
+      if (locked) ctx.globalAlpha = 0.45;
+      ctx.drawImage(petIcons[id], r.x + 8, r.y + 6, 26, 30);
+      ctx.restore();
+      ctx.fillStyle = locked ? 'rgba(90,58,26,0.55)' : UI_TEXT;
+      ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText(`${item.name}·${item.element}`, r.x + 42, r.y + 18);
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(90,58,26,0.7)';
+      ctx.fillText(`伤${item.damage} · ${item.cooldown}s${item.slow ? ' · 减速' : item.aoe ? ' · 溅射' : item.kb ? ' · 击退' : ''}`, r.x + 42, r.y + 33);
+      ctx.textAlign = 'right';
+      ctx.font = '12px -apple-system, sans-serif';
+      if (locked) {
+        ctx.fillStyle = 'rgba(90,58,26,0.6)';
+        ctx.fillText(`Lv.${item.level}`, r.x + colW - 10, r.y + 26);
+      } else if (!owned) {
+        ctx.fillStyle = meta.coins >= item.price ? '#854F0B' : '#A32D2D';
+        ctx.fillText(`${item.price} 金`, r.x + colW - 10, r.y + 26);
+      } else if (active) {
+        ctx.fillStyle = '#1D9E75';
+        ctx.fillText('出战中', r.x + colW - 10, r.y + 26);
+      } else {
+        ctx.fillStyle = UI_TEXT;
+        ctx.fillText('点击出战', r.x + colW - 10, r.y + 26);
+      }
+      ctx.textAlign = 'left';
+      shopRows.push(r);
+    });
   } else {
-    const src = shopTab === 'weapon' ? CONFIG.weapons : shopTab === 'equip' ? CONFIG.equipment : CONFIG.pets;
-    const ownedList = shopTab === 'weapon' ? meta.owned : shopTab === 'equip' ? meta.ownedEquip : meta.ownedPets;
-    const rh = shopTab === 'pet' ? 70 : 58;
+    const src = shopTab === 'weapon' ? CONFIG.weapons : CONFIG.equipment;
+    const ownedList = shopTab === 'weapon' ? meta.owned : meta.ownedEquip;
+    const rh = 58;
     for (const [id, item] of Object.entries(src)) {
       const r = { x: rx, y: ry, w: rw, h: rh, kind: shopTab, id };
       const owned = ownedList.includes(id);
       const locked = li.lv < item.level;
       const equipped = shopTab === 'weapon' && meta.weapon === id;
       cardBg(r, equipped || (owned && shopTab !== 'weapon') ? 'equipped' : locked ? 'locked' : 'normal', uiPressedId === 'row_' + shopTab + '_' + id);
-      let textX = r.x + 18;
-      if (shopTab === 'pet') {
-        ctx.save();
-        if (locked) ctx.globalAlpha = 0.45;
-        ctx.drawImage(petIcons[id], r.x + 14, r.y + 14, 38, 42);
-        ctx.restore();
-        textX = r.x + 64;
-      }
       ctx.fillStyle = locked ? 'rgba(90,58,26,0.55)' : UI_TEXT;
       ctx.font = '15px -apple-system, sans-serif';
-      ctx.fillText(item.name, textX, r.y + 24);
+      ctx.fillText(item.name, r.x + 18, r.y + 24);
       ctx.font = '12px -apple-system, sans-serif';
       ctx.fillStyle = 'rgba(90,58,26,0.75)';
-      ctx.fillText(item.desc, textX, r.y + rh - 14);
+      ctx.fillText(item.desc, r.x + 18, r.y + rh - 14);
       ctx.textAlign = 'right';
       ctx.font = '14px -apple-system, sans-serif';
       const cy = r.y + rh / 2 + 5;
@@ -900,7 +966,7 @@ function drawShop() {
         ctx.fillText('点击装备', r.x + rw - 18, cy);
       } else {
         ctx.fillStyle = '#1D9E75';
-        ctx.fillText(shopTab === 'pet' ? '已跟随' : '已生效', r.x + rw - 18, cy);
+        ctx.fillText('已生效', r.x + rw - 18, cy);
       }
       ctx.textAlign = 'left';
       shopRows.push(r);
