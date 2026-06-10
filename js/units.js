@@ -55,7 +55,7 @@ function updateUnits(dt) {
     const p = pickups[i];
     p.t += dt; p.life += dt;
     if (p.life > CONFIG.pickupLife) { if (p.src) p.src.out--; pickups.splice(i, 1); continue; }
-    if (Math.hypot(p.x - player.x, p.y - player.y) < 38) { collectPickup(p); pickups.splice(i, 1); }
+    if (Math.hypot(p.x - player.x, p.y - player.y) < 38 + (stats.magnet || 0)) { collectPickup(p); pickups.splice(i, 1); }
   }
   // 羊：吃草 ↔ 蹦跳挪窝
   for (let i = sheepL.length - 1; i >= 0; i--) {

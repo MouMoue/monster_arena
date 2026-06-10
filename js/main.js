@@ -176,9 +176,9 @@ function onKill(m) {
   kills++;
   const cfg = CONFIG.monsters[m.type];
   const tb = 1 + (m.tier || 0) * 0.6;
-  const gain = Math.round(cfg.coin * diff().coinMul * tb);
+  const gain = Math.round(cfg.coin * diff().coinMul * tb * (stats.coinMul || 1));
   grantCoins(gain);
-  grantXp(Math.round(cfg.xp * tb));
+  grantXp(Math.round(cfg.xp * tb * (stats.xpMul || 1)));
   addFloater(m.x, m.y - 40, `+${gain}`, '#FAC775');
   dropFrom(m);
   if (cfg.explodes) spawnExplosion(m.x, m.y);
@@ -257,6 +257,7 @@ function update(dt) {
     player.phase = (player.phase + dt * 2.2) % 1;
   }
   updateCam();
+  if (stats.regen && player.hp > 0) player.hp = Math.min(stats.maxHp, player.hp + stats.regen * dt);
   player.fireCd -= dt;
   player.muzzle -= dt;
   player.invuln -= dt;
@@ -361,7 +362,7 @@ function update(dt) {
           });
         }
       }
-      if (frame >= ps.cols) { pet.state = 'idle'; pet.animT = 0; pet.atkCd = cfg.cooldown; pet.target = null; }
+      if (frame >= ps.cols) { pet.state = 'idle'; pet.animT = 0; pet.atkCd = cfg.cooldown * (stats.petCd || 1); pet.target = null; }
     }
   }
 
@@ -780,7 +781,7 @@ function drawHUD() {
   ctx.fillStyle = C.hud;
   ctx.font = '12px -apple-system, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(`HP ${player.hp}/${stats.maxHp}`, 24, 25);
+  ctx.fillText(`HP ${Math.ceil(player.hp)}/${stats.maxHp}`, 24, 25);
 
   const li = levelInfo();
   ctx.drawImage(tswRes.G.icon, 14, 32, 26, 26);          // 金币图标（资源 NoShadow 版）
@@ -811,6 +812,7 @@ function drawHUD() {
 }
 
 const PAUSE_BTN = { x: W - 50, y: 10, w: 38, h: 38 };
+const PAUSE_DIFF_BTNS = ['easy', 'normal', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 196 + i * 100, y: H / 2 + 4, w: 92, h: 44 }));
 const GAME_SHOP_BTN = { x: W - 94, y: 10, w: 38, h: 38 };
 function drawPauseBtn() {
   iconBtn('pause', PAUSE_BTN, 7, state === 'paused' ? 'hover' : 'blue');
@@ -850,12 +852,20 @@ function drawTitle() {
   ctx.font = '14px -apple-system, sans-serif';
   ctx.fillStyle = C.hudDim;
   ctx.fillText('无尽大陆 · 自动锁定射击 · 精灵与佣兵伴你作战', W / 2, H / 2 - 90);
-  ctx.fillText('移动：方向键 / WASD（手机拖动摇杆）　难度数字键 1-3　商城 B', W / 2, H / 2 - 68);
+  ctx.fillText('移动：方向键 / WASD（手机拖动摇杆）　难度数字键 1-4　商城 B', W / 2, H / 2 - 68);
 
   for (let i = 0; i < DIFF_BTNS.length; i++) {
     const b = DIFF_BTNS[i];
     const sel = meta.difficulty === b.id;
-    iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, DIFF_ICONS[i], sel ? 'hover' : 'blue');
+    if (i < 3) {
+      iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, DIFF_ICONS[i], sel ? 'hover' : 'blue');
+    } else {
+      ctx.drawImage(sel ? uiBtn.Hover : uiBtn.Blue, b.x + 8, b.y, 56, 56);
+      ctx.fillStyle = UI_TEXT;
+      ctx.font = '26px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('4', b.x + 36, b.y + 37);
+    }
     ctx.fillStyle = sel ? '#FAC775' : C.hudDim;
     ctx.font = '13px -apple-system, sans-serif';
     ctx.textAlign = 'center';
@@ -1032,9 +1042,44 @@ function drawShop() {
       ctx.textAlign = 'left';
       shopRows.push(r);
     });
+  } else if (shopTab === 'equip') {
+    // 12 件装备两列网格（购买后被动叠加生效）
+    const colW = (rw - 16) / 2;
+    Object.entries(CONFIG.equipment).forEach(([id, item], i) => {
+      const col = i % 2, rowI = Math.floor(i / 2);
+      const r = { x: rx + col * (colW + 16), y: 142 + rowI * 54, w: colW, h: 50, kind: 'equip', id };
+      const owned = meta.ownedEquip.includes(id);
+      const locked = li.lv < item.level;
+      cardBg(r, owned ? 'equipped' : locked ? 'locked' : 'normal', uiPressedId === 'row_equip_' + id);
+      ctx.save();
+      if (locked) ctx.globalAlpha = 0.45;
+      ctx.drawImage(uiBanner.carved, r.x + 6, r.y + 5, 40, 40);
+      drawPixelIcon(EQUIP_ICONS[id], r.x + 10, r.y + 9, 32);
+      ctx.restore();
+      ctx.fillStyle = locked ? 'rgba(90,58,26,0.55)' : UI_TEXT;
+      ctx.font = '14px -apple-system, sans-serif';
+      ctx.fillText(item.name, r.x + 54, r.y + 21);
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(90,58,26,0.7)';
+      ctx.fillText(item.desc, r.x + 54, r.y + 38);
+      ctx.textAlign = 'right';
+      ctx.font = '13px -apple-system, sans-serif';
+      if (locked) {
+        ctx.fillStyle = 'rgba(90,58,26,0.6)';
+        ctx.fillText(`Lv.${item.level}`, r.x + colW - 10, r.y + 30);
+      } else if (!owned) {
+        ctx.fillStyle = meta.coins >= item.price ? '#854F0B' : '#A32D2D';
+        ctx.fillText(`${item.price} 金`, r.x + colW - 10, r.y + 30);
+      } else {
+        ctx.fillStyle = '#1D9E75';
+        ctx.fillText('已生效', r.x + colW - 10, r.y + 30);
+      }
+      ctx.textAlign = 'left';
+      shopRows.push(r);
+    });
   } else {
-    const src = shopTab === 'weapon' ? CONFIG.weapons : CONFIG.equipment;
-    const ownedList = shopTab === 'weapon' ? meta.owned : meta.ownedEquip;
+    const src = CONFIG.weapons;
+    const ownedList = meta.owned;
     const rh = 58;
     for (const [id, item] of Object.entries(src)) {
       const r = { x: rx, y: ry, w: rw, h: rh, kind: shopTab, id };
@@ -1045,8 +1090,7 @@ function drawShop() {
       ctx.save();
       if (locked) ctx.globalAlpha = 0.45;
       ctx.drawImage(uiBanner.carved, r.x + 8, r.y + 7, 44, 44);
-      if (shopTab === 'weapon') drawPixelIcon(HERO_GUNS[id].img, r.x + 12, r.y + 11, 36);
-      else drawPixelIcon(EQUIP_ICONS[id], r.x + 14, r.y + 13, 32);
+      drawPixelIcon(HERO_GUNS[id].img, r.x + 12, r.y + 11, 36);
       ctx.restore();
       ctx.fillStyle = locked ? 'rgba(90,58,26,0.55)' : UI_TEXT;
       ctx.font = '15px -apple-system, sans-serif';
@@ -1114,13 +1158,17 @@ function draw() {
     if (state === 'paused') {
       ctx.fillStyle = 'rgba(10,10,24,0.6)';
       ctx.fillRect(0, 0, W, H);
-      three(uiBanner.carved3, W / 2 - 160, H / 2 - 60, 320, 90);
+      nine(uiBanner.carved9, W / 2 - 220, H / 2 - 100, 440, 210);
       ctx.fillStyle = UI_TEXT;
       ctx.textAlign = 'center';
       ctx.font = '26px -apple-system, sans-serif';
-      ctx.fillText('已暂停', W / 2, H / 2 - 18);
+      ctx.fillText('已暂停', W / 2, H / 2 - 56);
       ctx.font = '13px -apple-system, sans-serif';
-      ctx.fillText('按 P 或点击右上角继续', W / 2, H / 2 + 8);
+      ctx.fillText('按 P 或点击右上角继续 · 数字键 1-4 或点击切换难度', W / 2, H / 2 - 28);
+      for (let i = 0; i < PAUSE_DIFF_BTNS.length; i++) {
+        const b = PAUSE_DIFF_BTNS[i];
+        skinBtn('pdiff' + i, b, CONFIG.difficulties[b.id].name, meta.difficulty === b.id ? 'hover' : 'secondary', 15);
+      }
       drawPauseBtn();
     } else if (state === 'gameover') {
       drawGameover();
@@ -1157,6 +1205,9 @@ function handleUI(dt) {
     } else if (state === 'gameover') {
       if (code === 'KeyR') { uiPress('restart'); startGame(); }
       else if (code === 'KeyB') { shopFrom = 'gameover'; state = 'shop'; }
+    } else if (state === 'paused' && /^Digit[1-4]$/.test(code)) {
+      meta.difficulty = ['easy', 'normal', 'hard', 'nightmare'][Number(code[5]) - 1];
+      saveMeta();
     } else if (code === 'KeyB' && (state === 'playing' || state === 'paused')) {
       shopFrom = 'game';                 // 局内进商城：游戏逻辑自动暂停
       state = 'shop';
@@ -1200,6 +1251,10 @@ function handleUI(dt) {
       } else if (inRect(p, PAUSE_BTN)) {
         uiPress('pause');
         state = state === 'playing' ? 'paused' : 'playing';
+      } else if (state === 'paused') {
+        for (let i = 0; i < PAUSE_DIFF_BTNS.length; i++) {
+          if (inRect(p, PAUSE_DIFF_BTNS[i])) { meta.difficulty = PAUSE_DIFF_BTNS[i].id; saveMeta(); uiPress('pdiff' + i); }
+        }
       }
     }
   }

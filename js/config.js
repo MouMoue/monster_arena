@@ -35,6 +35,13 @@ const CONFIG = {
     steel:   { name: '钢板甲',   desc: '生命上限 +50',     price: 1200, level: 4, effect: { maxHp: 50 } },
     mag:     { name: '快装弹夹', desc: '射速 +20%',        price: 1500, level: 5, effect: { rateMul: 0.20 } },
     amulet:  { name: '守护护符', desc: '受击无敌 +50%',    price: 2400, level: 6, effect: { invulnMul: 0.5 } },
+    magnet:  { name: '磁石项链', desc: '拾取范围 +90',     price: 2100, level: 7,  effect: { magnet: 90 } },
+    scope:   { name: '鹰眼瞄准镜', desc: '武器伤害 +20%',   price: 2700, level: 8,  effect: { dmgMul: 0.20 } },
+    ring:    { name: '再生戒指', desc: '每秒回复 2 生命',   price: 3600, level: 9,  effect: { regen: 2 } },
+    ap:      { name: '穿甲弹匣', desc: '子弹穿透 +1',       price: 4500, level: 10, effect: { pierceAdd: 1 } },
+    tome:    { name: '智慧巨著', desc: '经验获取 +25%',     price: 5400, level: 11, effect: { xpMul: 0.25 } },
+    clover:  { name: '幸运四叶草', desc: '金币获取 +20%',   price: 6000, level: 12, effect: { coinMul: 0.20 } },
+    bell:    { name: '精灵铃铛', desc: '精灵冷却 -20%',     price: 6900, level: 13, effect: { petCdCut: 0.20 } },
   },
 
   // 精灵图鉴（Scarloxy 全 16 只）：每次只能带一只出战（商城里点击已拥有的切换出战）

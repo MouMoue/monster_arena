@@ -45,18 +45,28 @@ function levelInfo() {
 function effectiveStats() {
   const w = CONFIG.weapons[meta.weapon];
   let maxHp = CONFIG.player.hp, speedMul = 1, rateMul = 1, invulnMul = 1;
+  let dmgMul = 1, pierceAdd = 0, regen = 0, magnet = 0, coinMul = 1, xpMul = 1, petCdCut = 0;
   for (const id of meta.ownedEquip) {
     const e = CONFIG.equipment[id].effect;
     if (e.maxHp) maxHp += e.maxHp;
     if (e.speedMul) speedMul += e.speedMul;
     if (e.rateMul) rateMul += e.rateMul;
     if (e.invulnMul) invulnMul += e.invulnMul;
+    if (e.dmgMul) dmgMul += e.dmgMul;
+    if (e.pierceAdd) pierceAdd += e.pierceAdd;
+    if (e.regen) regen += e.regen;
+    if (e.magnet) magnet += e.magnet;
+    if (e.coinMul) coinMul += e.coinMul;
+    if (e.xpMul) xpMul += e.xpMul;
+    if (e.petCdCut) petCdCut += e.petCdCut;
   }
   return {
     maxHp,
     speed: CONFIG.player.speed * speedMul,
     invuln: CONFIG.player.invuln * invulnMul,
-    weapon: { ...w, fireRate: w.fireRate * rateMul },
+    regen, magnet, coinMul, xpMul,
+    petCd: Math.max(0.5, 1 - petCdCut),
+    weapon: { ...w, fireRate: w.fireRate * rateMul, damage: Math.round(w.damage * dmgMul), pierce: w.pierce + pierceAdd },
   };
 }
 
