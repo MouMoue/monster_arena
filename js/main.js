@@ -1020,16 +1020,28 @@ function handleUI(dt) {
   }
 }
 
-// ---------- 主循环 ----------
+// ---------- 主循环（出错不冻结：屏幕提示 + 继续运行） ----------
 let last = performance.now();
+let lastError = null;
 function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   worldT += dt;
-  input.poll();
-  handleUI(dt);
-  if (state === 'playing') update(dt);
-  draw();
+  try {
+    input.poll();
+    handleUI(dt);
+    if (state === 'playing') update(dt);
+    draw();
+  } catch (e) {
+    if (lastError !== e.message) { lastError = e.message; console.error(e); }
+    ctx.setTransform(viewScale, 0, 0, viewScale, 0, 0);
+    ctx.fillStyle = 'rgba(160,30,30,0.9)';
+    ctx.fillRect(0, H - 34, W, 34);
+    ctx.fillStyle = '#fff';
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('运行错误（请截图反馈）: ' + e.message, 12, H - 12);
+  }
   input.flush();
   requestAnimationFrame(loop);
 }

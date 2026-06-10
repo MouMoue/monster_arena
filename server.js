@@ -18,7 +18,7 @@ http.createServer((req, res) => {
   if (!filePath.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not Found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 }).listen(PORT, () => console.log(`serving ${ROOT} at http://localhost:${PORT}`));
