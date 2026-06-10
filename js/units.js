@@ -122,24 +122,33 @@ function updateUnits(dt) {
         continue;
       }
     }
-    // 跟随阵位；侍从优先跑向战利品
+    // 跟随阵位；侍从优先跑向战利品（被地形挡住 0.7 秒就放弃拾取 3 秒，不再死磕）
+    mc.giveUpT = (mc.giveUpT || 0) - dt;
     let tx = player.x + CONFIG.mercSlots[mc.cls][0];
     let ty = player.y + CONFIG.mercSlots[mc.cls][1];
-    if (mc.cls === 'pawn' && pickups.length) {
+    let chasingLoot = false;
+    if (mc.cls === 'pawn' && pickups.length && mc.giveUpT <= 0) {
       let best = null, bd = cfg.collectRange;
       for (const p of pickups) {
         const d = Math.hypot(p.x - mc.x, p.y - mc.y);
         if (d < bd) { bd = d; best = p; }
       }
-      if (best) { tx = best.x; ty = best.y; }
+      if (best) { tx = best.x; ty = best.y; chasingLoot = true; }
     }
     const dx = tx - mc.x, dy = ty - mc.y, d = Math.hypot(dx, dy);
     if (d > 26) {
+      const ox = mc.x, oy = mc.y;
       const nx = mc.x + dx / d * 275 * dt, ny = mc.y + dy / d * 275 * dt;
       if (MAPGEN.walkable(nx, mc.y)) mc.x = nx;
       if (MAPGEN.walkable(mc.x, ny)) mc.y = ny;
       mc.moving = true;
       if (Math.abs(dx) > 4) mc.flip = dx < 0;
+      if (chasingLoot) {
+        if (Math.hypot(mc.x - ox, mc.y - oy) < 30 * dt) {     // 几乎没挪动 = 被挡住
+          mc.stuckT = (mc.stuckT || 0) + dt;
+          if (mc.stuckT > 0.7) { mc.giveUpT = 3; mc.stuckT = 0; }
+        } else mc.stuckT = 0;
+      } else mc.stuckT = 0;
     } else mc.moving = false;
     // 分离推挤：不和主角/其他佣兵叠在一起
     const pd = Math.hypot(mc.x - player.x, mc.y - player.y);
@@ -326,8 +335,10 @@ function drawSceneryItem(s) {
       ctx.drawImage(tswTree, 0, 384, 192, 192, s.x - 96, s.y - 140, 192, 192);
       break;
     case 'elev': {
-      const src = s.v === 2 ? [192, 0, 64, 256] : s.v === 1 ? [0, 256, 192, 192] : [0, 0, 192, 256];
-      ctx.drawImage(tswElev, src[0], src[1], src[2], src[3], s.x - src[2] / 2, s.y - src[3] + 40, src[2], src[3]);
+      // 统一用大岩丘源块 (0,0,192,192)，按变体缩放；可见底边 = s.y + 少量，与碰撞圆对齐
+      const sc = [1, 0.8, 0.62][s.v];
+      const w = 192 * sc;
+      ctx.drawImage(tswElev, 0, 0, 192, 192, s.x - w / 2, s.y + 26 - w, w, w);
       break;
     }
     case 'castle': {
@@ -364,7 +375,7 @@ function drawSceneryItem(s) {
       else img = tswWoodTower.frames[s.state];
       if (s.state !== 'construction' && s.state !== 'destroyed') {
         const f = Math.floor((worldT * 5 + s.ph * 4)) % 4;
-        ctx.drawImage(img, f * 256, 0, 256, 192, s.x - 96, s.y - 150, 192, 144);
+        ctx.drawImage(img, f * 256, 0, 256, 192, s.x - 96, s.y - 120, 192, 144);
       } else {
         ctx.drawImage(img, s.x - 64, s.y - 140);
       }

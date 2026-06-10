@@ -83,12 +83,13 @@ const MAPGEN = (() => {
         }
       }
     }
-    // 岩台障碍（Tilemap_Elevation 三种切块）
+    // 岩台障碍（Tilemap_Elevation 大岩丘，三种缩放；碰撞圆与可见底边精确对齐）
     if (rnd() < 0.16) {
       const s = pick(spots);
       const v = Math.floor(rnd() * 3);
+      const r = [58, 46, 36][v];
       c.scenery.push({ kind: 'elev', v, x: s.wx, y: s.wy });
-      c.colliders.push({ x: s.wx, y: s.wy - 10, r: v === 2 ? 36 : 62 });
+      c.colliders.push({ x: s.wx, y: s.wy - r * 0.35, r });
     }
     // 地标建筑（骑士阵营 4 色 × 完好/在建/废墟；完好塔楼有驻塔弓手）
     if (rnd() < 0.1 && grassSpots.length) {
