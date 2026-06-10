@@ -1,24 +1,24 @@
-// 数值配置表 —— 全部可调，对应 PRD 4.1-4.6 节
+// 数值配置表 —— 全部可调
+// 素材分配总表见 docs/PRD.md 第14节；Tiny Swords 全部 197 张素材的用途在各 js 文件中标注
 const CONFIG = {
   W: 960,
   H: 540,
 
-  // 大地图世界（Tiny Swords 海岛）：相机跟随主角，水→沙滩→草地双层自动拼接地形
-  world: { w: 3200, h: 1920, tile: 64 },
+  // 无边界世界：纯函数噪声地形，按 8x8 格区块惰性生成装饰/碰撞，每局随机种子
+  world: { tile: 64, chunk: 8 },
 
   player: {
     hp: 100,
     speed: 240,
     radius: 20,
-    invuln: 0.5,            // 受击无敌秒数
+    invuln: 0.5,
   },
 
   bullet: {
     max: 100,
-    knockback: 8,           // 命中击退像素（怪物可有抗性 kbMul）
+    knockback: 8,
   },
 
-  // 武器库：等级解锁 + 金币购买；pellets/spread 散射，pierce 穿透
   weapons: {
     pistol:  { name: '手枪',   desc: '伤害25 · 射速4',        price: 0,    level: 1, damage: 25, fireRate: 4,  speed: 600, pellets: 1, spread: 0,    pierce: 0, bulletR: 4,   visual: { len: 17, w: 6 } },
     smg:     { name: '冲锋枪', desc: '伤害12 · 射速10',       price: 150,  level: 2, damage: 12, fireRate: 10, speed: 650, pellets: 1, spread: 0.06, pierce: 0, bulletR: 3,   visual: { len: 22, w: 5 } },
@@ -27,7 +27,6 @@ const CONFIG = {
     minigun: { name: '加特林', desc: '伤害15 · 射速16',       price: 1200, level: 7, damage: 15, fireRate: 16, speed: 700, pellets: 1, spread: 0.12, pierce: 0, bulletR: 3.5, visual: { len: 30, w: 9 } },
   },
 
-  // 装备：购买后被动生效，可叠加
   equipment: {
     leather: { name: '皮甲',     desc: '生命上限 +25',     price: 100, level: 2, effect: { maxHp: 25 } },
     boots:   { name: '疾跑靴',   desc: '移动速度 +15%',    price: 250, level: 3, effect: { speedMul: 0.15 } },
@@ -36,28 +35,71 @@ const CONFIG = {
     amulet:  { name: '守护护符', desc: '受击无敌 +50%',    price: 800, level: 6, effect: { invulnMul: 0.5 } },
   },
 
-  // 精灵：购买后永久跟随主人出战，自动对范围内敌人施放元素攻击
   pets: {
     sparchu:  { name: '火精灵', desc: '火焰爆发 · 伤害18',       price: 500,  level: 3, damage: 18, range: 340, cooldown: 1.3, effect: 'fire',  sheet: 'Sparchu.png',  icon: 'Sparchu.png',  scale: 0.55 },
     cleaf:    { name: '草精灵', desc: '藤叶切割 · 伤害26',       price: 900,  level: 5, damage: 26, range: 340, cooldown: 1.6, effect: 'green', sheet: 'Cleaf.png',    icon: 'Cleaf.png',    scale: 0.55 },
     friolera: { name: '冰精灵', desc: '寒冰冻结 · 伤害22+减速',  price: 1500, level: 7, damage: 22, range: 340, cooldown: 1.5, effect: 'ice',   sheet: 'Friolera.png', icon: 'Friolera.png', scale: 0.55, slow: 2.0 },
   },
   petSheet: { frame: 192, cols: 4, idleFps: 6, attackFps: 10, castFrame: 2 },
-  petSlots: [[-52, 26], [52, 26], [-84, -16]],   // 跟随阵位（相对主角）
+  petSlots: [[-52, 26], [52, 26], [-84, -16]],
 
-  // 精灵攻击特效：施放在目标身上的爆发动画，dmgFrame 帧结算伤害
   effects: {
     fire:  { file: 'fire.png',  frames: 4, size: 192, fps: 12, scale: 0.75, dmgFrame: 1 },
     green: { file: 'green.png', frames: 4, size: 192, fps: 12, scale: 0.75, dmgFrame: 1 },
     ice:   { file: 'ice.png',   frames: 4, size: 192, fps: 12, scale: 0.75, dmgFrame: 1 },
   },
 
-  // 怪物图鉴：behavior = melee(近身挥击) / ranged(远程吐弹)
-  // 攻击动作: attacks 列表随机挑选；hit = 受击僵直动画；idle = 射程内等冷却时的待机
+  // 佣兵（Tiny Swords 骑士兵种，4 色 = 4 档强度，购买高档自动替换出战）
+  // 用到素材: Pawn/Warrior/Archer 全 4 色 12 张 + Dead.png 阵亡 + Arrow.png 箭矢
+  mercs: {
+    pawn: {
+      name: '侍从', clsDesc: '自动拾取战利品，锤击近敌',
+      hp: 70, damage: 9, range: 75, cooldown: 1.2, collectRange: 420,
+      tiers: [
+        { price: 200,  level: 2 }, { price: 450,  level: 5 },
+        { price: 900,  level: 8 }, { price: 1600, level: 11 },
+      ],
+      attack: { row: 2, frames: 6, fps: 12, hitFrame: 3 },
+    },
+    warrior: {
+      name: '战士', clsDesc: '近战横扫，范围伤害',
+      hp: 150, damage: 26, range: 95, aoe: 80, cooldown: 1.1,
+      tiers: [
+        { price: 350,  level: 3 }, { price: 750,  level: 6 },
+        { price: 1500, level: 9 }, { price: 2600, level: 12 },
+      ],
+      attack: { row: 2, frames: 6, fps: 13, hitFrame: 3 },
+    },
+    archer: {
+      name: '弓手', clsDesc: '远程射箭，射程极远',
+      hp: 90, damage: 18, range: 400, cooldown: 1.3, arrowSpeed: 520,
+      tiers: [
+        { price: 500,  level: 4 }, { price: 1000, level: 7 },
+        { price: 2000, level: 10 }, { price: 3600, level: 13 },
+      ],
+      attack: { row: 4, frames: 8, fps: 14, hitFrame: 3 },
+    },
+  },
+  mercTierNames: ['Ⅰ·蓝', 'Ⅱ·黄', 'Ⅲ·紫', 'Ⅳ·红'],
+  mercColors: ['Blue', 'Yellow', 'Purple', 'Red'],
+  mercSlots: { pawn: [0, 64], warrior: [-74, -44], archer: [74, -44] },
+  mercRespawn: 15,          // 阵亡后复活秒数（播放 Dead.png 动画）
+
+  // 拾取物（Tiny Swords resources：G 金 / M 肉 / W 木，Spawn 落地动画 + Idle 待拾取）
+  pickups: {
+    gold: { coins: 20, label: '+20 金币' },
+    meat: { heal: 25,  label: '+25 生命' },
+    wood: { xp: 14,    label: '+14 经验' },
+  },
+  dropRates: { meat: 0.10, gold: 0.08, wood: 0.08 },
+  pickupLife: 25,
+
+  // 怪物图鉴
+  // luizmelo 四怪(150px帧/单行文件) + Tiny Swords 哥布林军团(192/128px帧/多行雪碧图, 4色=4梯队)
   monsters: {
-    goblin: {                          // 基础近战
+    goblin: {
       hp: 50, speed: 120, damage: 10, radius: 22, coin: 5, xp: 8, kbMul: 1,
-      scale: 1.5, bodyOffsetY: 26, behavior: 'melee',
+      frame: 150, scale: 1.5, bodyOffsetY: 26, behavior: 'melee',
       attackRange: 65, attackCooldown: 1.0, hitFrame: 5, attacks: ['attack', 'attack2'],
       anims: {
         move:    { file: 'goblin/Run.png',     frames: 8, fps: 12 },
@@ -68,9 +110,9 @@ const CONFIG = {
         death:   { file: 'goblin/Death.png',   frames: 4, fps: 10 },
       },
     },
-    flyingEye: {                       // 高速冲锋，脆皮
+    flyingEye: {
       hp: 30, speed: 210, damage: 8, radius: 20, coin: 6, xp: 10, kbMul: 1,
-      scale: 1.4, bodyOffsetY: 34, behavior: 'melee',
+      frame: 150, scale: 1.4, bodyOffsetY: 34, behavior: 'melee',
       attackRange: 55, attackCooldown: 0.8, hitFrame: 4, attacks: ['attack', 'attack2'],
       anims: {
         move:    { file: 'flying_eye/Flight.png',  frames: 8, fps: 14 },
@@ -80,9 +122,9 @@ const CONFIG = {
         death:   { file: 'flying_eye/Death.png',   frames: 4, fps: 10 },
       },
     },
-    mushroom: {                        // 远程：保持距离吐孢子
+    mushroom: {
       hp: 40, speed: 80, damage: 12, radius: 20, coin: 8, xp: 12, kbMul: 1,
-      scale: 1.5, bodyOffsetY: 26, behavior: 'ranged',
+      frame: 150, scale: 1.5, bodyOffsetY: 26, behavior: 'ranged',
       attackRange: 280, attackCooldown: 1.8, hitFrame: 5, attacks: ['attack', 'attack2'],
       projectile: { file: 'mushroom/Projectile_sprite.png', frames: 8, fps: 12, size: 50, scale: 1.1, speed: 230, radius: 10 },
       anims: {
@@ -94,9 +136,9 @@ const CONFIG = {
         death:   { file: 'mushroom/Death.png',   frames: 4, fps: 10 },
       },
     },
-    skeleton: {                        // 坦克：血厚移速慢，重剑高伤，击退抗性
+    skeleton: {
       hp: 150, speed: 70, damage: 20, radius: 24, coin: 15, xp: 25, kbMul: 0.3,
-      scale: 1.6, bodyOffsetY: 26, behavior: 'melee',
+      frame: 150, scale: 1.6, bodyOffsetY: 26, behavior: 'melee',
       attackRange: 85, attackCooldown: 1.4, hitFrame: 5, attacks: ['attack', 'attack2'],
       anims: {
         move:    { file: 'skeleton/Walk.png',     frames: 4, fps: 8 },
@@ -107,33 +149,74 @@ const CONFIG = {
         death:   { file: 'skeleton/Death.png',    frames: 4, fps: 10 },
       },
     },
+    torchGob: {                      // 火把哥布林：近战挥火把，命中带火焰特效
+      hp: 60, speed: 145, damage: 12, radius: 20, coin: 8, xp: 12, kbMul: 0.8,
+      frame: 192, scale: 0.95, bodyOffsetY: 22, behavior: 'melee',
+      attackRange: 70, attackCooldown: 1.1, hitFrame: 3, attacks: ['attack'], fireFx: true,
+      tierSheets: ['torch/blue/Torch_Blue.png', 'torch/yellow/Torch_Yellow.png', 'torch/purple/Torch_Purple.png', 'torch/red/Torch_Red.png'],
+      anims: {
+        move:   { row: 1, frames: 6, fps: 10 },
+        idle:   { row: 0, frames: 7, fps: 8 },
+        attack: { row: 2, frames: 6, fps: 12 },
+      },
+    },
+    tntGob: {                        // TNT 哥布林：远程抛炸药，落点爆炸
+      hp: 45, speed: 115, damage: 16, radius: 20, coin: 10, xp: 14, kbMul: 1,
+      frame: 192, scale: 0.95, bodyOffsetY: 22, behavior: 'lob',
+      attackRange: 430, attackCooldown: 2.2, hitFrame: 4, attacks: ['attack'],
+      tierSheets: ['tnt/blue/TNT_Blue.png', 'tnt/yellow/TNT_Yellow.png', 'tnt/purple/TNT_Purple.png', 'tnt/red/TNT_Red.png'],
+      anims: {
+        move:   { row: 1, frames: 6, fps: 10 },
+        idle:   { row: 0, frames: 7, fps: 8 },
+        attack: { row: 2, frames: 7, fps: 12 },
+      },
+    },
+    barrelGob: {                     // 自爆桶哥布林：滚向主角贴脸引爆（被打死也会炸）
+      hp: 40, speed: 175, damage: 30, radius: 18, coin: 12, xp: 16, kbMul: 0.6,
+      frame: 128, scale: 1.1, bodyOffsetY: 14, behavior: 'kamikaze',
+      attackRange: 55, attackCooldown: 9, hitFrame: 2, attacks: ['attack'], explodes: true,
+      tierSheets: ['barrel/blue/Barrel_Blue.png', 'barrel/yellow/Barrel_Yellow.png', 'barrel/purple/Barrel_Purple.png', 'barrel/red/Barrel_Red.png'],
+      anims: {
+        move:   { row: 1, frames: 6, fps: 10 },
+        idle:   { row: 0, frames: 1, fps: 4 },
+        attack: { row: 5, frames: 3, fps: 9 },   // 引爆抖动
+      },
+    },
   },
 
-  stagger: 1.4,             // 受击僵直触发冷却（防止速射武器无限打断）
+  // 哥布林梯队（颜色=强度），按局内时间解锁更高梯队
+  tierUnlock: [0, 60, 150, 240],
+  tierMul: [1, 1.5, 2.1, 2.8],
+  tierNames: ['蓝', '黄', '紫', '红'],
 
-  // 难度曲线：按局内时间取第一个 until 大于当前时间的档位；weights 为刷怪类型权重
+  explosion: { radius: 85, player: 20, monster: 45, merc: 30, frames: 9, fps: 15, size: 192, dmgFrame: 2 },
+  dynamite: { speed: 270, frames: 6, fps: 12 },
+  fireFx: { frames: 7, fps: 14, size: 128 },
+  arrow: { dmg: 18 },
+  towerDef: { range: 430, cooldown: 1.5, damage: 26 },   // 完好骑士塔楼的驻塔弓手
+  goldMine: { interval: 10, range: 480, maxOut: 2 },
+
+  stagger: 1.4,
+
   difficulty: [
-    { until: 30,       interval: 2.0, cap: 8,  hpMul: 1.0, weights: { goblin: 1 } },
-    { until: 60,       interval: 1.2, cap: 15, hpMul: 1.2, weights: { goblin: 0.7, flyingEye: 0.3 } },
-    { until: 120,      interval: 0.8, cap: 25, hpMul: 1.5, weights: { goblin: 0.4, flyingEye: 0.25, mushroom: 0.25, skeleton: 0.1 } },
-    { until: Infinity, interval: 0.5, cap: 40, hpMul: 2.0, hpRampPer60s: 0.5, weights: { goblin: 0.3, flyingEye: 0.25, mushroom: 0.25, skeleton: 0.2 } },
+    { until: 30,       interval: 2.0, cap: 8,  hpMul: 1.0, weights: { goblin: 0.55, torchGob: 0.45 } },
+    { until: 60,       interval: 1.2, cap: 15, hpMul: 1.2, weights: { goblin: 0.3, flyingEye: 0.2, torchGob: 0.3, tntGob: 0.2 } },
+    { until: 120,      interval: 0.8, cap: 25, hpMul: 1.5, weights: { goblin: 0.18, flyingEye: 0.14, mushroom: 0.14, skeleton: 0.09, torchGob: 0.2, tntGob: 0.15, barrelGob: 0.1 } },
+    { until: Infinity, interval: 0.5, cap: 40, hpMul: 2.0, hpRampPer60s: 0.5, weights: { goblin: 0.13, flyingEye: 0.11, mushroom: 0.12, skeleton: 0.11, torchGob: 0.18, tntGob: 0.16, barrelGob: 0.19 } },
   ],
 
-  // 难度档：影响刷怪速度、怪物强度与金币收益
   difficulties: {
     easy:   { name: '简单', spawnMul: 1.4, hpMul: 0.8, dmgMul: 0.7, coinMul: 1.0 },
     normal: { name: '普通', spawnMul: 1.0, hpMul: 1.0, dmgMul: 1.0, coinMul: 1.2 },
     hard:   { name: '困难', spawnMul: 0.7, hpMul: 1.4, dmgMul: 1.4, coinMul: 1.6 },
   },
 
-  // 经验曲线：升到下一级所需 = base + growth*(当前等级-1)
   xp: { base: 60, growth: 40 },
 
-  mobileMonsterCap: 30,     // 移动端同屏上限（覆盖各档 cap 的上限）
-  spawnDist: [600, 740],    // 怪物在主角周围环形刷出的距离范围（视野外）
+  mobileMonsterCap: 30,
+  spawnDist: [600, 740],
 
   colors: {
-    floor: '#20243a',
     stickman: '#f4f4f4',
     gun: '#b9b9b9',
     muzzle: '#FAC775',
