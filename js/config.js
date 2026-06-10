@@ -236,9 +236,8 @@ const CONFIG = {
   ],
 
   difficulties: {
-    easy:   { name: '简单', spawnMul: 1.4, hpMul: 0.8, dmgMul: 0.7, coinMul: 1.0 },
-    normal: { name: '普通', spawnMul: 1.0, hpMul: 1.0, dmgMul: 1.0, coinMul: 1.2 },
-    hard:   { name: '困难', spawnMul: 0.6, hpMul: 1.5, dmgMul: 1.5, coinMul: 1.6 },
+    easy:      { name: '简单', spawnMul: 1.2, hpMul: 0.9, dmgMul: 0.8, coinMul: 1.0 },
+    hard:      { name: '困难', spawnMul: 0.6, hpMul: 1.5, dmgMul: 1.5, coinMul: 1.6 },
     nightmare: { name: '噩梦', spawnMul: 0.45, hpMul: 2.2, dmgMul: 2.0, coinMul: 2.5 },
   },
 

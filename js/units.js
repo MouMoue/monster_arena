@@ -143,6 +143,7 @@ function updateUnits(dt) {
     if (mc.cls === 'pawn' && pickups.length && mc.giveUpT <= 0 && leash < 340) {
       let best = null, bd = cfg.collectRange;
       for (const p of pickups) {
+        if (Math.hypot(p.x - player.x, p.y - player.y) < 110) continue;   // 主角脚边的留给主角
         const d = Math.hypot(p.x - mc.x, p.y - mc.y);
         if (d < bd) { bd = d; best = p; }
       }
@@ -176,11 +177,22 @@ function updateUnits(dt) {
         } else mc.stuckT = 0;
       } else mc.stuckT = 0;
     } else mc.moving = false;
-    // 分离推挤：不和主角/其他佣兵叠在一起
+    // 分离推挤：不和主角叠在一起；主角朝佣兵推进时侧向让位（不被一路顶着走）
     const pd = Math.hypot(mc.x - player.x, mc.y - player.y);
-    if (pd > 0 && pd < 58) {
-      const px = mc.x + (mc.x - player.x) / pd * (58 - pd), py = mc.y + (mc.y - player.y) / pd * (58 - pd);
+    if (pd > 0 && pd < 68) {
+      let rx = (mc.x - player.x) / pd, ry = (mc.y - player.y) / pd;
+      const mdx = player.dirX || 0, mdy = player.dirY ?? 0;
+      if (player.moving && (mdx * rx + mdy * ry) > 0.4) {
+        const sgn = (rx * mdy - ry * mdx) >= 0 ? -1 : 1;
+        rx = -mdy * sgn; ry = mdx * sgn;
+      }
+      const push = 68 - pd;
+      let px = mc.x + rx * push, py = mc.y + ry * push;
       if (MAPGEN.walkable(px, py)) { mc.x = px; mc.y = py; }
+      else {
+        px = mc.x - ry * push; py = mc.y + rx * push;     // 径向被地形挡 → 换垂直方向
+        if (MAPGEN.walkable(px, py)) { mc.x = px; mc.y = py; }
+      }
     }
     for (const other of mercs) {
       if (other === mc || other.state === 'dead') continue;

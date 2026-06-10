@@ -10,7 +10,7 @@ const meta = {
   activePet: null,         // 出战精灵（每次只能带一只）
   mercTier: { pawn: -1, warrior: -1, archer: -1 },   // 佣兵档位（-1 未雇佣，0-3 = 蓝/黄/紫/红）
   weapon: 'pistol',        // 当前装备的武器
-  difficulty: 'normal',
+  difficulty: 'easy',
 };
 
 function loadMeta() {
@@ -20,7 +20,7 @@ function loadMeta() {
   } catch (_) {}
   if (!meta.owned.includes('pistol')) meta.owned.push('pistol');
   if (!CONFIG.weapons[meta.weapon]) meta.weapon = 'pistol';
-  if (!CONFIG.difficulties[meta.difficulty]) meta.difficulty = 'normal';
+  if (!CONFIG.difficulties[meta.difficulty]) meta.difficulty = 'easy';
   if (!meta.mercTier) meta.mercTier = { pawn: -1, warrior: -1, archer: -1 };
   meta.ownedPets = meta.ownedPets.filter(id => CONFIG.pets[id]);
   if (meta.activePet && !meta.ownedPets.includes(meta.activePet)) meta.activePet = null;

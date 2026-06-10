@@ -725,7 +725,7 @@ function drawWorldScene() {
   for (const mc of mercs) order.push({ y: mc.state === 'dead' ? mc.y - 1e6 : mc.y, fn: () => drawMerc(mc) });
   for (const sh of sheepL) if (inView(sh.x, sh.y, 130)) order.push({ y: sh.y, fn: () => drawSheepE(sh) });
   for (const p of pickups) if (inView(p.x, p.y, 130)) order.push({ y: p.y, fn: () => drawPickup(p) });
-  order.push({ y: player.y, fn: () => { shadow(player.x, player.y + 38, 26); drawHero(ctx, player.x, player.y, player); } });
+  order.push({ y: player.y + 6, fn: () => { shadow(player.x, player.y + 38, 26); drawHero(ctx, player.x, player.y, player); } });   // 贴近平局时主角优先在前，避免被佣兵闪烁遮挡
   order.sort((a, b) => a.y - b.y);
   for (const o of order) o.fn();
 
@@ -812,7 +812,7 @@ function drawHUD() {
 }
 
 const PAUSE_BTN = { x: W - 50, y: 10, w: 38, h: 38 };
-const PAUSE_DIFF_BTNS = ['easy', 'normal', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 196 + i * 100, y: H / 2 + 4, w: 92, h: 44 }));
+const PAUSE_DIFF_BTNS = ['easy', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 146 + i * 100, y: H / 2 + 4, w: 92, h: 44 }));
 const GAME_SHOP_BTN = { x: W - 94, y: 10, w: 38, h: 38 };
 function drawPauseBtn() {
   iconBtn('pause', PAUSE_BTN, 7, state === 'paused' ? 'hover' : 'blue');
@@ -836,8 +836,8 @@ function drawTouchControls() {
 }
 
 // ---------- 标题 ----------
-const DIFF_BTNS = ['easy', 'normal', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 205 + i * 110, y: H / 2 - 38, w: 80, h: 56 }));
-const DIFF_ICONS = [3, 4, 5, 8];
+const DIFF_BTNS = ['easy', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 150 + i * 110, y: H / 2 - 38, w: 80, h: 56 }));
+const DIFF_ICONS = [3, 4, 5];   // 图标 1/2/3 对应 简单/困难/噩梦
 const START_BTN = { x: W / 2 - 110, y: H / 2 + 46, w: 220, h: 52 };
 const SHOP_BTN = { x: W / 2 - 110, y: H / 2 + 110, w: 220, h: 46 };
 
@@ -852,17 +852,12 @@ function drawTitle() {
   ctx.font = '14px -apple-system, sans-serif';
   ctx.fillStyle = C.hudDim;
   ctx.fillText('无尽大陆 · 自动锁定射击 · 精灵与佣兵伴你作战', W / 2, H / 2 - 90);
-  ctx.fillText('移动：方向键 / WASD（手机拖动摇杆）　难度数字键 1-4　商城 B', W / 2, H / 2 - 68);
+  ctx.fillText('移动：方向键 / WASD（手机拖动摇杆）　难度数字键 1-3　商城 B', W / 2, H / 2 - 68);
 
   for (let i = 0; i < DIFF_BTNS.length; i++) {
     const b = DIFF_BTNS[i];
     const sel = meta.difficulty === b.id;
-    if (i < 3) {
-      iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, DIFF_ICONS[i], sel ? 'hover' : 'blue');
-    } else {
-      ctx.drawImage(sel ? uiBtn.Hover : uiBtn.Blue, b.x + 8, b.y, 56, 56);
-      drawPixelIcon(ICON_FOUR, b.x + 8 + (56 - 35) / 2, b.y + (56 - 35) / 2, 35);   // 像素数字4，与1-3图标同风格
-    }
+    iconBtn('diff' + i, { x: b.x + 8, y: b.y, w: 56, h: 56 }, DIFF_ICONS[i], sel ? 'hover' : 'blue');
     ctx.fillStyle = sel ? '#FAC775' : C.hudDim;
     ctx.font = '13px -apple-system, sans-serif';
     ctx.textAlign = 'center';
@@ -1161,7 +1156,7 @@ function draw() {
       ctx.font = '26px -apple-system, sans-serif';
       ctx.fillText('已暂停', W / 2, H / 2 - 56);
       ctx.font = '13px -apple-system, sans-serif';
-      ctx.fillText('按 P 或点击右上角继续 · 数字键 1-4 或点击切换难度', W / 2, H / 2 - 28);
+      ctx.fillText('按 P 或点击右上角继续 · 数字键 1-3 或点击切换难度', W / 2, H / 2 - 28);
       for (let i = 0; i < PAUSE_DIFF_BTNS.length; i++) {
         const b = PAUSE_DIFF_BTNS[i];
         skinBtn('pdiff' + i, b, CONFIG.difficulties[b.id].name, meta.difficulty === b.id ? 'hover' : 'secondary', 15);
@@ -1188,9 +1183,8 @@ function handleUI(dt) {
   for (const code of input.keyPresses) {
     if (state === 'title') {
       if (code === 'Digit1') { meta.difficulty = 'easy'; saveMeta(); }
-      else if (code === 'Digit2') { meta.difficulty = 'normal'; saveMeta(); }
-      else if (code === 'Digit3') { meta.difficulty = 'hard'; saveMeta(); }
-      else if (code === 'Digit4') { meta.difficulty = 'nightmare'; saveMeta(); }
+      else if (code === 'Digit2') { meta.difficulty = 'hard'; saveMeta(); }
+      else if (code === 'Digit3') { meta.difficulty = 'nightmare'; saveMeta(); }
       else if (code === 'KeyB') { shopFrom = 'title'; state = 'shop'; }
       else if (code === 'Enter' || code === 'Space' || code === 'NumpadEnter') { uiPress('start'); startGame(); }
     } else if (state === 'shop') {
@@ -1202,8 +1196,8 @@ function handleUI(dt) {
     } else if (state === 'gameover') {
       if (code === 'KeyR') { uiPress('restart'); startGame(); }
       else if (code === 'KeyB') { shopFrom = 'gameover'; state = 'shop'; }
-    } else if (state === 'paused' && /^Digit[1-4]$/.test(code)) {
-      meta.difficulty = ['easy', 'normal', 'hard', 'nightmare'][Number(code[5]) - 1];
+    } else if (state === 'paused' && /^Digit[1-3]$/.test(code)) {
+      meta.difficulty = ['easy', 'hard', 'nightmare'][Number(code[5]) - 1];
       saveMeta();
     } else if (code === 'KeyB' && (state === 'playing' || state === 'paused')) {
       shopFrom = 'game';                 // 局内进商城：游戏逻辑自动暂停
