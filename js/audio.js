@@ -74,8 +74,8 @@ const AUDIO = (() => {
       for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
       base = 560 + Math.abs(h) % 380;
     }
-    tone({ freq: base, to: base * 0.4, type: 'square', dur: 0.07, vol: 0.15 });
-    noise({ dur: 0.05, vol: 0.06, hp: 1200, lp: 7000 });
+    tone({ freq: base, to: base * 0.4, type: 'square', dur: 0.055, vol: 0.06 });
+    noise({ dur: 0.035, vol: 0.022, hp: 1200, lp: 7000 });
   }
 
   // ---- 击倒/击杀：低频 thud + 破碎噪声(大怪更低更长) ----
@@ -103,58 +103,37 @@ const AUDIO = (() => {
     tone({ freq: 330, to: 80, type: 'square', dur: 0.5, vol: 0.10, delay: 0.06 });
   }
 
-  // ---- BGM：循环 chiptune（和弦进行 Am-F-C-G + 琶音 + 主旋律 + 鼓组）----
-  const CHORDS = [
-    { bass: 110.0, notes: [220.0, 261.6, 329.6] }, // Am: A C E
-    { bass: 87.31, notes: [174.6, 220.0, 261.6] }, // F : F A C
-    { bass: 130.8, notes: [261.6, 329.6, 392.0] }, // C : C E G
-    { bass: 98.00, notes: [196.0, 246.9, 293.7] }, // G : G B D
+  // ---- BGM：舒缓抒情循环（柔和 sine 和弦铺底 + 三角波琶音 + 留白主旋律，无硬鼓点）----
+  const PROG = [
+    { bass: 130.8, pad: [261.6, 329.6, 392.0, 493.9] }, // Cmaj7
+    { bass: 98.00, pad: [196.0, 246.9, 293.7, 392.0] }, // G
+    { bass: 110.0, pad: [220.0, 261.6, 329.6, 392.0] }, // Am7
+    { bass: 87.31, pad: [174.6, 220.0, 261.6, 329.6] }, // Fmaj7
   ];
-  // 32 步主旋律（0 = 休止），跨 4 小节
-  const LEAD = [
-    659.3, 0, 587.3, 0, 523.3, 0, 440.0, 0, 523.3, 0, 587.3, 0, 493.9, 0, 392.0, 392.0,
-    659.3, 0, 587.3, 0, 523.3, 0, 659.3, 0, 783.9, 0, 659.3, 0, 587.3, 523.3, 493.9, 0,
+  // 32 步抒情主旋律（0 = 休止，留白制造呼吸感）
+  const MEL = [
+    523.3, 0, 0, 587.3, 0, 659.3, 0, 0, 784.0, 0, 0, 0, 659.3, 0, 587.3, 0,
+    523.3, 0, 0, 493.9, 0, 440.0, 0, 0, 392.0, 0, 0, 0, 440.0, 0, 493.9, 0,
   ];
-  const BPM = 132;
+  const BPM = 100;
   const STEP = 60 / BPM / 2; // 八分音符
 
-  function kick(at) {
-    if (!ctx) return;
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(135, at);
-    o.frequency.exponentialRampToValueAtTime(48, at + 0.11);
-    g.gain.setValueAtTime(0.16, at);
-    g.gain.exponentialRampToValueAtTime(0.0008, at + 0.14);
-    o.connect(g); g.connect(master);
-    o.start(at); o.stop(at + 0.16);
-  }
-  function hat(at) {
-    if (!ctx) return;
-    const n = Math.floor(ctx.sampleRate * 0.03);
-    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-    const s = ctx.createBufferSource(); s.buffer = buf;
-    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.03, at); g.gain.exponentialRampToValueAtTime(0.0006, at + 0.03);
-    s.connect(f); f.connect(g); g.connect(master);
-    s.start(at); s.stop(at + 0.04);
+  // 柔和铺底和弦（长音、慢起音）
+  function pad(freqs, at) {
+    for (const f of freqs) tone({ freq: f, type: 'sine', dur: STEP * 7.6, vol: 0.026, delay: at - ctx.currentTime, attack: 0.14 });
   }
 
   function schedule() {
     if (!ctx) return;
-    while (bgmNextT < ctx.currentTime + 0.2) {
+    while (bgmNextT < ctx.currentTime + 0.25) {
       const step = bgmStep % 32;
       const dly = bgmNextT - ctx.currentTime;
-      const ch = CHORDS[Math.floor(step / 8) % 4];
-      if (step % 4 === 0) kick(bgmNextT);                       // 每拍鼓点
-      else hat(bgmNextT);                                       // 其余踩镲
-      if (step % 2 === 0) tone({ freq: ch.bass, type: 'triangle', dur: STEP * 1.7, vol: 0.085, delay: dly }); // bass
-      tone({ freq: ch.notes[step % ch.notes.length], type: 'square', dur: STEP * 0.8, vol: 0.05, delay: dly, attack: 0.006 }); // 琶音
-      const lead = LEAD[step];
-      if (lead) tone({ freq: lead, type: 'square', dur: STEP * 1.4, vol: 0.075, delay: dly, attack: 0.01 });  // 主旋律
+      const ch = PROG[Math.floor(step / 8) % 4];
+      if (step % 8 === 0) pad(ch.pad, bgmNextT);                                                                            // 每小节铺一层柔和和弦
+      if (step % 4 === 0) tone({ freq: ch.bass, type: 'triangle', dur: STEP * 3.4, vol: 0.055, delay: dly, attack: 0.03 }); // 柔和低音
+      if (step % 2 === 0) tone({ freq: ch.pad[Math.floor(step / 2) % ch.pad.length], type: 'triangle', dur: STEP * 1.5, vol: 0.026, delay: dly, attack: 0.02 }); // 轻琶音
+      const m = MEL[step];
+      if (m) tone({ freq: m, type: 'triangle', dur: STEP * 1.9, vol: 0.056, delay: dly, attack: 0.035 });                  // 抒情主旋律
       bgmStep++; bgmNextT += STEP;
     }
   }
