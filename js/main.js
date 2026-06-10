@@ -248,6 +248,8 @@ function update(dt) {
 
   player.moving = input.moveX !== 0 || input.moveY !== 0;
   if (player.moving) {
+    player.dirX = input.moveX;          // 记录移动朝向，佣兵/精灵列队在身后
+    player.dirY = input.moveY;
     const nx = player.x + input.moveX * stats.speed * dt;
     const ny = player.y + input.moveY * stats.speed * dt;
     if (MAPGEN.walkable(nx, player.y)) player.x = nx;
@@ -322,8 +324,9 @@ function update(dt) {
     const cfg = CONFIG.pets[pet.id];
     pet.animT += dt;
     pet.atkCd -= dt;
-    const tx = player.x + CONFIG.petSlots[pet.slot][0];
-    const ty = player.y + CONFIG.petSlots[pet.slot][1];
+    const pbx = -(player.dirX || 0), pby = -(player.dirY ?? 1);   // 精灵也列队在身后侧翼
+    const tx = player.x + pbx * 56 + pby * 46;
+    const ty = player.y + pby * 56 - pbx * 46;
     const dx = tx - pet.x, dy = ty - pet.y;
     const d = Math.hypot(dx, dy);
     if (pet.state !== 'attack') {
@@ -843,7 +846,7 @@ function drawTitle() {
   ctx.fillStyle = UI_TEXT;
   ctx.textAlign = 'center';
   ctx.font = '36px -apple-system, sans-serif';
-  ctx.fillText('火柴人：怪物围城', W / 2, H / 2 - 148);
+  ctx.fillText('猫猫枪手：无尽兽潮', W / 2, H / 2 - 148);
   ctx.font = '14px -apple-system, sans-serif';
   ctx.fillStyle = C.hudDim;
   ctx.fillText('无尽大陆 · 自动锁定射击 · 精灵与佣兵伴你作战', W / 2, H / 2 - 90);

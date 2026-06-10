@@ -109,8 +109,16 @@ function updateUnits(dt) {
       if (frame >= a.frames) { mc.state = 'idle'; mc.animT = 0; mc.atkCd = cfg.cooldown; mc.target = null; }
       continue;
     }
-    // 寻找攻击目标
-    if (mc.atkCd <= 0) {
+    // 寻找攻击目标（离主角太远时先归队，不恋战）
+    const leash = Math.hypot(mc.x - player.x, mc.y - player.y);
+    if (leash > 620) {        // 被地形卡住彻底掉队 → 闪现归队
+      for (let k = 0; k < 12; k++) {
+        const a = Math.random() * Math.PI * 2, dd = 60 + Math.random() * 70;
+        const tx2 = player.x + Math.cos(a) * dd, ty2 = player.y + Math.sin(a) * dd;
+        if (MAPGEN.walkable(tx2, ty2)) { mc.x = tx2; mc.y = ty2; break; }
+      }
+    }
+    if (mc.atkCd <= 0 && leash < 340) {
       let best = null, bd = mc.cls === 'archer' ? cfg.range : cfg.range;
       for (const m of monsters) {
         if (m.dying) continue;
@@ -124,10 +132,15 @@ function updateUnits(dt) {
     }
     // 跟随阵位；侍从优先跑向战利品（被地形挡住 0.7 秒就放弃拾取 3 秒，不再死磕）
     mc.giveUpT = (mc.giveUpT || 0) - dt;
-    let tx = player.x + CONFIG.mercSlots[mc.cls][0];
-    let ty = player.y + CONFIG.mercSlots[mc.cls][1];
+    // 动态阵型：始终列队在主角移动方向的身后（往下走时佣兵在上方，不挡角色）
+    const fbx = -(player.dirX || 0), fby = -(player.dirY ?? 1);
+    const fpx = -fby, fpy = fbx;
+    const FORM = { pawn: [100, 0], warrior: [72, -88], archer: [72, 88] };
+    const [fBack, fSide] = FORM[mc.cls];
+    let tx = player.x + fbx * fBack + fpx * fSide;
+    let ty = player.y + fby * fBack + fpy * fSide;
     let chasingLoot = false;
-    if (mc.cls === 'pawn' && pickups.length && mc.giveUpT <= 0) {
+    if (mc.cls === 'pawn' && pickups.length && mc.giveUpT <= 0 && leash < 340) {
       let best = null, bd = cfg.collectRange;
       for (const p of pickups) {
         const d = Math.hypot(p.x - mc.x, p.y - mc.y);
@@ -138,7 +151,20 @@ function updateUnits(dt) {
     const dx = tx - mc.x, dy = ty - mc.y, d = Math.hypot(dx, dy);
     if (d > 26) {
       const ox = mc.x, oy = mc.y;
-      const nx = mc.x + dx / d * 275 * dt, ny = mc.y + dy / d * 275 * dt;
+      let mvx = dx / d, mvy = dy / d;
+      // 目标在主角另一侧时侧绕，不从主角身上挤过去
+      const pvx = player.x - mc.x, pvy = player.y - mc.y;
+      const pdist = Math.hypot(pvx, pvy) || 1;
+      if (pdist < 80 && (mvx * pvx + mvy * pvy) / pdist > 0.6) {
+        const sgn = mvx * pvy - mvy * pvx >= 0 ? 1 : -1;
+        const rx = -mvy * sgn, ry = mvx * sgn;
+        mvx = mvx * 0.3 + rx * 0.7;
+        mvy = mvy * 0.3 + ry * 0.7;
+        const n = Math.hypot(mvx, mvy);
+        mvx /= n; mvy /= n;
+      }
+      const spd = Math.min(520, 300 + d * 0.8);   // 距离越远追得越快，不会被主角甩掉
+      const nx = mc.x + mvx * spd * dt, ny = mc.y + mvy * spd * dt;
       if (MAPGEN.walkable(nx, mc.y)) mc.x = nx;
       if (MAPGEN.walkable(mc.x, ny)) mc.y = ny;
       mc.moving = true;
@@ -152,8 +178,8 @@ function updateUnits(dt) {
     } else mc.moving = false;
     // 分离推挤：不和主角/其他佣兵叠在一起
     const pd = Math.hypot(mc.x - player.x, mc.y - player.y);
-    if (pd > 0 && pd < 46) {
-      const px = mc.x + (mc.x - player.x) / pd * (46 - pd), py = mc.y + (mc.y - player.y) / pd * (46 - pd);
+    if (pd > 0 && pd < 58) {
+      const px = mc.x + (mc.x - player.x) / pd * (58 - pd), py = mc.y + (mc.y - player.y) / pd * (58 - pd);
       if (MAPGEN.walkable(px, py)) { mc.x = px; mc.y = py; }
     }
     for (const other of mercs) {

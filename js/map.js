@@ -20,8 +20,8 @@ const MAPGEN = (() => {
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   }
   function terrainAt(tx, ty) {
-    const n = noise(tx / 16, ty / 16) * 0.62 + noise(tx / 5 + 1000, ty / 5 + 1000) * 0.38;
-    return n > 0.60 ? 2 : n > 0.47 ? 1 : 0;
+    const n = noise(tx / 18, ty / 18) * 0.62 + noise(tx / 5 + 1000, ty / 5 + 1000) * 0.38;
+    return n > 0.55 ? 2 : n > 0.40 ? 1 : 0;   // 陆地占比 ~70%，大陆更连贯
   }
   const landAt = (tx, ty) => terrainAt(tx, ty) >= 1;
   const grassAt = (tx, ty) => terrainAt(tx, ty) === 2;
