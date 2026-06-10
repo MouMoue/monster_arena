@@ -155,6 +155,7 @@ function hurtPlayer(dmg) {
   if (player.invuln > 0) return;
   player.hp -= Math.round(dmg * diff().dmgMul);
   player.invuln = stats.invuln;
+  if (window.AUDIO) AUDIO.hurt();
   if (player.hp <= 0) { player.hp = 0; gameOver(); }
 }
 
@@ -174,6 +175,7 @@ function grantXp(n) {
 
 function onKill(m) {
   kills++;
+  if (window.AUDIO) AUDIO.kill(m);
   const cfg = CONFIG.monsters[m.type];
   const tb = 1 + (m.tier || 0) * 0.6;
   const gain = Math.round(cfg.coin * diff().coinMul * tb * (stats.coinMul || 1));
@@ -290,6 +292,7 @@ function update(dt) {
       }
       player.fireCd = 1 / wpn.fireRate;
       player.muzzle = 0.07;
+      if (window.AUDIO) AUDIO.shoot(player.weaponId);
     }
   } else if (player.moving) {
     player.aim.x = input.moveX;
@@ -547,6 +550,7 @@ function update(dt) {
 
 function gameOver() {
   state = 'gameover';
+  if (window.AUDIO) AUDIO.gameOver();
   saveMeta();
   const best = loadBest();
   if (!best || playTime > best.time) {
@@ -1175,12 +1179,13 @@ function draw() {
 }
 
 // ---------- UI 事件路由 ----------
-function startGame() { state = 'playing'; reset(); }
+function startGame() { state = 'playing'; reset(); if (window.AUDIO) { AUDIO.unlock(); AUDIO.startBGM(); } }
 
 function handleUI(dt) {
   uiTick(dt);
   if (lastTap) lastTap.t += dt;
   for (const code of input.keyPresses) {
+    if (code === 'KeyM') { if (window.AUDIO) AUDIO.toggleMute(); continue; }
     if (state === 'title') {
       if (code === 'Digit1') { meta.difficulty = 'easy'; saveMeta(); }
       else if (code === 'Digit2') { meta.difficulty = 'hard'; saveMeta(); }

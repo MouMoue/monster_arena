@@ -12,6 +12,7 @@ class Input {
     this.keyPresses = [];            // 本帧的按键 code 列表，UI 用
 
     addEventListener('keydown', e => {
+      if (window.AUDIO) AUDIO.unlock();
       if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
       if (!e.repeat) this.keyPresses.push(e.code);
       this.keys[e.code] = true;
@@ -31,6 +32,7 @@ class Input {
   }
 
   onDown(e) {
+    if (window.AUDIO) AUDIO.unlock();
     e.preventDefault();
     try { this.canvas.setPointerCapture(e.pointerId); } catch (_) {}
     const p = this.toLogical(e);
