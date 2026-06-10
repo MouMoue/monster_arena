@@ -8,7 +8,8 @@ function uiTick(dt) { if (uiPressedT > 0) { uiPressedT -= dt; if (uiPressedT <= 
 
 // 9 宫格（192 源图、64 角；小尺寸时角部等比缩小）
 function nine(img, x, y, w, h) {
-  const sc = 64;                         // 源图角固定 64，目标角按需缩小
+  const c = Math.min(64, Math.floor(h / 2.2), Math.floor(w / 2.2));   // 目标角尺寸（小尺寸时等比缩小）
+  const sc = 64;                         // 源图角固定 64
   const iw = img.width, ih = img.height;
   const mw = iw - sc * 2, mh = ih - sc * 2;
   ctx.drawImage(img, 0, 0, sc, sc, x, y, c, c);
