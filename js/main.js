@@ -26,6 +26,7 @@ let state = 'title';
 let player, bullets, monsters, eprojs, pets, petProjs, effects, floaters;
 let playTime, kills, runCoins, spawnTimer, stats, worldT = 0;
 let boss = null, bossIdx = 0, nextBossT = Infinity, fxList = [];
+let zones = [];          // Boss 持续性地面区域（毒雾等）
 let shopTab = 'weapon';
 let shopFrom = 'title';      // 商城来源：title / game / gameover（决定返回去向）
 let lastTap = null;
@@ -61,7 +62,7 @@ function reset() {
   kills = 0;
   runCoins = 0;
   spawnTimer = 0.5;
-  boss = null; bossIdx = 0; nextBossT = CONFIG.bossSchedule.firstAt; fxList = [];
+  boss = null; bossIdx = 0; nextBossT = CONFIG.bossSchedule.firstAt; fxList = []; zones = [];
   unitsReset();
   updateCam();
 }
@@ -146,6 +147,71 @@ function spawnBoss() {
   monsters.push(m);
   addFloater(player.x, player.y - 130, '⚠ ' + cfg.bossName + ' 出现！', '#FF6B6B', 2.6);
   if (window.AUDIO) AUDIO.kill(m);   // 低吼提示
+}
+
+// ---------- Boss 技能组：每个 Boss 轮换施放专属技能 ----------
+const BOSS_KITS = {
+  bossGoblin:   ['slam', 'whirl', 'warcry'],
+  bossEye:      ['dash', 'minions', 'dash', 'slam'],
+  bossMushroom: ['ring', 'poison', 'slam'],
+  bossSkeleton: ['triple', 'bonering', 'minions'],
+};
+function bossCast(skill) {
+  const bc = CONFIG.monsters[boss.type];
+  if (skill === 'slam') {                  // 追踪重压：玩家脚下预警→落地
+    spawnFx('warn', player.x, player.y, { r: 115, life: 0.75, dmg: Math.round(bc.damage * 1.3), color: 'rgba(230,60,70,0.9)' });
+  } else if (skill === 'whirl') {          // 旋风斩：以自身为中心大范围扫击
+    addFloater(boss.x, boss.y - 110, '旋风斩！', '#FFD27A', 1.1);
+    spawnFx('warn', boss.x, boss.y, { r: 195, life: 0.7, dmg: Math.round(bc.damage * 1.5) });
+  } else if (skill === 'warcry') {         // 战吼：周围小怪狂暴加速
+    addFloater(boss.x, boss.y - 110, '战吼！小的们上！', '#FF9090', 1.4);
+    spawnFx('shockwave', boss.x, boss.y + 6, { r: 330, color: '#ff8a5a', life: 0.6 });
+    for (const m of monsters) {
+      if (!CONFIG.monsters[m.type].boss && !m.dying && Math.hypot(m.x - boss.x, m.y - boss.y) < 640) m.rageT = 4.5;
+    }
+  } else if (skill === 'dash') {           // 俯冲：锁定落点→蓄力→高速冲撞
+    const tx = player.x, ty = player.y;
+    spawnFx('warn', tx, ty, { r: 95, life: 0.5, color: 'rgba(90,150,255,0.85)' });
+    boss.dashDelay = 0.5;
+    boss.dashTo = [tx, ty];
+  } else if (skill === 'ring') {           // 孢子风暴：360° 环形弹幕
+    addFloater(boss.x, boss.y - 110, '孢子风暴！', '#C0DD97', 1.2);
+    const p = bc.projectile, n = 14;
+    for (let k = 0; k < n; k++) {
+      const a = k / n * Math.PI * 2;
+      eprojs.push({ type: boss.type, x: boss.x, y: boss.y - 10, vx: Math.cos(a) * p.speed, vy: Math.sin(a) * p.speed, animT: Math.random() });
+    }
+  } else if (skill === 'poison') {         // 毒雾：三片持续伤害区域
+    addFloater(boss.x, boss.y - 110, '毒雾蔓延！', '#9CCB60', 1.2);
+    for (let k = 0; k < 3; k++) {
+      const zx = player.x + (k === 0 ? 0 : (Math.random() - 0.5) * 280);
+      const zy = player.y + (k === 0 ? 0 : (Math.random() - 0.5) * 280);
+      spawnFx('warn', zx, zy, { r: 92, life: 0.7, color: 'rgba(120,190,60,0.85)' });
+      zones.push({ x: zx, y: zy, r: 92, until: playTime + 5.2, tickCd: 0.7, dmg: Math.round(bc.damage * 0.45), delay: 0.7, tick: 0 });
+    }
+  } else if (skill === 'triple') {         // 三连斩：连续三记追身斩击
+    addFloater(boss.x, boss.y - 120, '三连斩！', '#E8E8F0', 1.2);
+    for (let k = 0; k < 3; k++) {
+      spawnFx('warn', player.x + (Math.random() - 0.5) * 70, player.y + (Math.random() - 0.5) * 70,
+        { r: 105, life: 0.55 + k * 0.38, dmg: Math.round(bc.damage * 0.9) });
+    }
+  } else if (skill === 'bonering') {       // 白骨牢笼：环绕玩家的骨刺阵（从缝隙逃生）
+    addFloater(boss.x, boss.y - 120, '白骨牢笼！', '#E8E8F0', 1.3);
+    const n = 6;
+    for (let k = 0; k < n; k++) {
+      const a = k / n * Math.PI * 2 + Math.random() * 0.3;
+      spawnFx('warn', player.x + Math.cos(a) * 150, player.y + Math.sin(a) * 150,
+        { r: 80, life: 0.85, dmg: Math.round(bc.damage * 1.0) });
+    }
+  } else if (skill === 'minions') {        // 召唤同族小怪
+    const t = boss.type === 'bossEye' ? 'flyingEye' : 'skeleton';
+    addFloater(boss.x, boss.y - 110, '召唤！', '#FFB0B0', 1.2);
+    for (let k = 0; k < 2; k++) {
+      const a = Math.random() * Math.PI * 2, dd = 80 + Math.random() * 60;
+      const sx = boss.x + Math.cos(a) * dd, sy = boss.y + Math.sin(a) * dd;
+      if (MAPGEN.walkable(sx, sy)) monsters.push(makeMonster(t, sx, sy));
+    }
+  }
 }
 
 // ---------- 程序化特效（Boss 攻击）：冲击波 / 范围预警 / 落地冲击 ----------
@@ -403,8 +469,9 @@ function update(dt) {
         let ang = base;
         if (wpn.pellets > 1) ang += wpn.spread * (i / (wpn.pellets - 1) - 0.5) * 2;
         else if (wpn.spread > 0) ang += (Math.random() - 0.5) * 2 * wpn.spread;
+        const bx = ax + Math.cos(base) * tip, by = gy + Math.sin(base) * tip;
         bullets.push({
-          x: ax + Math.cos(base) * tip, y: gy + Math.sin(base) * tip,
+          x: bx, y: by, ox: bx, oy: by, maxD: wpn.range || 0,
           vx: Math.cos(ang) * wpn.speed, vy: Math.sin(ang) * wpn.speed,
           r: wpn.bulletR, dmg: wpn.damage, pierce: wpn.pierce, hit: [], vis: wpn.bullet,
         });
@@ -429,6 +496,7 @@ function update(dt) {
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     if (Math.hypot(b.x - player.x, b.y - player.y) > 800) { bullets.splice(i, 1); continue; }
+    if (b.maxD && Math.hypot(b.x - b.ox, b.y - b.oy) > b.maxD) { bullets.splice(i, 1); continue; }   // 短射程武器（烈焰喷射器）
     for (const m of monsters) {
       if (m.dying || b.hit.includes(m)) continue;
       if (Math.hypot(b.x - m.x, b.y - m.y) < b.r + CONFIG.monsters[m.type].radius) {
@@ -529,10 +597,25 @@ function update(dt) {
     if (boss.dying || !monsters.includes(boss)) boss = null;
     else {
       const bc = CONFIG.monsters[boss.type];
-      boss.aoeCd = (boss.aoeCd == null ? 4 : boss.aoeCd) - dt;     // 周期 AOE：玩家脚下预警 → 落地
-      if (boss.aoeCd <= 0) {
-        boss.aoeCd = 5;
-        spawnFx('warn', player.x, player.y, { r: 115, life: 0.75, dmg: Math.round(bc.damage * 1.3), color: 'rgba(230,60,70,0.9)' });
+      // 俯冲蓄力 → 起飞
+      if (boss.dashDelay != null && boss.dashDelay > 0) {
+        boss.dashDelay -= dt;
+        if (boss.dashDelay <= 0) {
+          const [tx, ty] = boss.dashTo;
+          const dd = Math.hypot(tx - boss.x, ty - boss.y) || 1;
+          boss.dashT = Math.min(0.85, (dd + 100) / 880);
+          boss.dashVx = (tx - boss.x) / dd * 880;
+          boss.dashVy = (ty - boss.y) / dd * 880;
+          boss.dashHit = false;
+        }
+      }
+      // 技能轮换（俯冲途中不施放）
+      boss.skillCd = (boss.skillCd == null ? 3.2 : boss.skillCd) - dt;
+      if (boss.skillCd <= 0 && !(boss.dashT > 0) && !(boss.dashDelay > 0)) {
+        const kit = BOSS_KITS[boss.type] || ['slam'];
+        bossCast(kit[(boss.kitIdx = boss.kitIdx || 0) % kit.length]);
+        boss.kitIdx++;
+        boss.skillCd = 3.6 + Math.random() * 1.4;
       }
       if (bc.summon) {
         boss.summonCd -= dt;
@@ -565,6 +648,7 @@ function update(dt) {
     m.animT += dt;
     m.staggerCd -= dt;
     m.slowT -= dt;
+    m.rageT = (m.rageT || 0) - dt;
     if (m.dying) {
       const da = cfg.anims.death;
       const dur = da ? da.frames / da.fps + 0.3 : 0.45;
@@ -576,6 +660,20 @@ function update(dt) {
     const d = Math.hypot(dx, dy) || 1;
     if (d > 1500 && !cfg.boss) { monsters.splice(i, 1); continue; }   // 被甩远的怪直接回收（Boss 不回收）
     m.atkCd -= dt;
+
+    if (m.dashT > 0) {                 // Boss 俯冲：高速冲撞，命中一次重伤
+      m.dashT -= dt;
+      const nx = m.x + m.dashVx * dt, ny = m.y + m.dashVy * dt;
+      if (MAPGEN.walkable(nx, m.y)) m.x = nx;
+      if (MAPGEN.walkable(m.x, ny)) m.y = ny;
+      m.flip = m.dashVx < 0;
+      if (!m.dashHit && Math.hypot(player.x - m.x, player.y - m.y) < cfg.radius + CONFIG.player.radius) {
+        m.dashHit = true;
+        hurtPlayer(cfg.damage * 1.2);
+        spawnFx('shockwave', m.x, m.y + 6, { r: 130, color: '#9fd0ff', life: 0.4 });
+      }
+      continue;
+    }
 
     if (m.state === 'hit') {
       const a = cfg.anims.hit;
@@ -621,7 +719,7 @@ function update(dt) {
       m.hitDone = false;
       m.atkAnim = cfg.attacks[Math.floor(Math.random() * cfg.attacks.length)];
     } else if (!inRange || cfg.behavior === 'kamikaze') {
-      const spd = cfg.speed * (m.slowT > 0 ? 0.5 : 1);
+      const spd = cfg.speed * (m.slowT > 0 ? 0.5 : 1) * (m.rageT > 0 ? 1.5 : 1);
       const nx = m.x + dx / d * spd * dt, ny = m.y + dy / d * spd * dt;
       if (MAPGEN.walkable(nx, m.y)) m.x = nx;
       if (MAPGEN.walkable(m.x, ny)) m.y = ny;
@@ -696,6 +794,18 @@ function update(dt) {
     f.t += dt;
     f.y -= 32 * dt;
     if (f.t >= f.life) floaters.splice(i, 1);
+  }
+
+  // Boss 持续区域（毒雾）：踩入周期掉血
+  for (let i = zones.length - 1; i >= 0; i--) {
+    const z = zones[i];
+    if (z.delay > 0) { z.delay -= dt; continue; }
+    if (playTime > z.until) { zones.splice(i, 1); continue; }
+    z.tick -= dt;
+    if (z.tick <= 0) {
+      z.tick = z.tickCd;
+      if (Math.hypot(player.x - z.x, player.y - z.y) < z.r + CONFIG.player.radius * 0.5) hurtPlayer(z.dmg);
+    }
   }
 }
 
@@ -804,6 +914,7 @@ function drawMonster(m) {
   if (m.flip) ctx.scale(-1, 1);
   let _flt = cfg.tint ? cfg.tint : '';
   if (m.slowT > 0) _flt += ' saturate(0.4) brightness(1.25)';
+  else if (m.rageT > 0) _flt += ' saturate(1.9) brightness(1.12)';
   if (_flt) ctx.filter = _flt.trim();
   const img = cfg.tierSheets ? images[m.type].tiers[m.tier] : images[m.type][key];
   const row = cfg.tierSheets ? a.row : 0;
@@ -876,6 +987,17 @@ function drawWorldScene() {
   ctx.save();
   ctx.translate(-cam.x, -cam.y);
   drawGround(visChunks);
+  for (const z of zones) {
+    if (z.delay > 0) continue;
+    const pul = 0.5 + 0.5 * Math.sin(worldT * 5 + z.x);
+    ctx.globalAlpha = 0.22 + 0.12 * pul;
+    ctx.fillStyle = '#74b82e';
+    ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#4f8a18'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r * (0.8 + 0.2 * pul), z.r * 0.55 * (0.8 + 0.2 * pul), 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 
   const order = [];
   for (const c of visChunks) {
@@ -1024,7 +1146,7 @@ function drawTitle() {
   ctx.fillText('猫猫枪手：无尽兽潮', W / 2, H / 2 - 148);
   ctx.font = '14px -apple-system, sans-serif';
   ctx.fillStyle = C.hudDim;
-  ctx.fillText('无尽大陆 · 自动锁定射击 · 精灵与佣兵伴你作战', W / 2, H / 2 - 90);
+  ctx.fillText('无尽兽潮 · 自动锁定射击 · 精灵与佣兵伴你作战', W / 2, H / 2 - 90);
   ctx.fillText('移动：方向键 / WASD（手机拖动摇杆）　难度数字键 1-3　商城 B', W / 2, H / 2 - 68);
 
   for (let i = 0; i < DIFF_BTNS.length; i++) {
