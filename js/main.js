@@ -1243,49 +1243,44 @@ function drawShop() {
       shopRows.push(r);
     });
   } else {
-    const src = CONFIG.weapons;
-    const ownedList = meta.owned;
-    const rh = 58;
-    for (const [id, item] of Object.entries(src)) {
-      const r = { x: rx, y: ry, w: rw, h: rh, kind: shopTab, id };
-      const owned = ownedList.includes(id);
+    // 武器两列网格（与装备页同构，可容 14 把）
+    const colW = (rw - 16) / 2;
+    Object.entries(CONFIG.weapons).forEach(([id, item], i) => {
+      const col = i % 2, rowI = Math.floor(i / 2);
+      const r = { x: rx + col * (colW + 16), y: 142 + rowI * 54, w: colW, h: 50, kind: 'weapon', id };
+      const owned = meta.owned.includes(id);
       const locked = li.lv < item.level;
-      const equipped = shopTab === 'weapon' && meta.weapon === id;
-      cardBg(r, equipped || (owned && shopTab !== 'weapon') ? 'equipped' : locked ? 'locked' : 'normal', uiPressedId === 'row_' + shopTab + '_' + id);
+      const equipped = meta.weapon === id;
+      cardBg(r, equipped ? 'equipped' : locked ? 'locked' : 'normal', uiPressedId === 'row_weapon_' + id);
       ctx.save();
       if (locked) ctx.globalAlpha = 0.45;
-      ctx.drawImage(uiBanner.carved, r.x + 8, r.y + 7, 44, 44);
-      drawPixelIcon(HERO_GUNS[id].img, r.x + 12, r.y + 11, 36);
+      ctx.drawImage(uiBanner.carved, r.x + 6, r.y + 5, 40, 40);
+      drawPixelIcon(HERO_GUNS[id].img, r.x + 10, r.y + 9, 32);
       ctx.restore();
       ctx.fillStyle = locked ? 'rgba(90,58,26,0.55)' : UI_TEXT;
-      ctx.font = '15px -apple-system, sans-serif';
-      ctx.fillText(item.name, r.x + 64, r.y + 24);
-      ctx.font = '12px -apple-system, sans-serif';
-      ctx.fillStyle = 'rgba(90,58,26,0.75)';
-      ctx.fillText(item.desc, r.x + 64, r.y + rh - 14);
-      ctx.textAlign = 'right';
       ctx.font = '14px -apple-system, sans-serif';
-      const cy = r.y + rh / 2 + 5;
+      ctx.fillText(item.name, r.x + 54, r.y + 21);
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(90,58,26,0.7)';
+      ctx.fillText(item.desc, r.x + 54, r.y + 38);
+      ctx.textAlign = 'right';
+      ctx.font = '13px -apple-system, sans-serif';
       if (locked) {
         ctx.fillStyle = 'rgba(90,58,26,0.6)';
-        ctx.fillText(`Lv.${item.level} 解锁`, r.x + rw - 18, cy);
+        ctx.fillText(`Lv.${item.level}`, r.x + colW - 10, r.y + 30);
       } else if (!owned) {
         ctx.fillStyle = meta.coins >= item.price ? '#854F0B' : '#A32D2D';
-        ctx.fillText(`${item.price} 金`, r.x + rw - 18, cy);
+        ctx.fillText(`${item.price} 金`, r.x + colW - 10, r.y + 30);
       } else if (equipped) {
         ctx.fillStyle = '#1D9E75';
-        ctx.fillText('使用中', r.x + rw - 18, cy);
-      } else if (shopTab === 'weapon') {
-        ctx.fillStyle = UI_TEXT;
-        ctx.fillText('点击装备', r.x + rw - 18, cy);
+        ctx.fillText('使用中', r.x + colW - 10, r.y + 30);
       } else {
-        ctx.fillStyle = '#1D9E75';
-        ctx.fillText('已生效', r.x + rw - 18, cy);
+        ctx.fillStyle = UI_TEXT;
+        ctx.fillText('点击装备', r.x + colW - 10, r.y + 30);
       }
       ctx.textAlign = 'left';
       shopRows.push(r);
-      ry += rh + 10;
-    }
+    });
   }
 }
 
