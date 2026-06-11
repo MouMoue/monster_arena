@@ -66,7 +66,8 @@ function iconBtn(id, r, iconIdx, kind = 'blue', customImg = null) {
   ctx.save();
   if (customImg) ctx.imageSmoothingEnabled = false;
   if (customImg && kind === 'disable') ctx.globalAlpha = 0.45;
-  ctx.drawImage(icon, r.x + (r.w - s) / 2, r.y + (r.h - s) / 2 + (pressed ? 2 : 0), s, s);
+  const iy = customImg ? r.y + r.h * 0.44 - s / 2 : r.y + (r.h - s) / 2;   // 自绘图标对齐按钮面板中心（底座偏下）
+  ctx.drawImage(icon, r.x + (r.w - s) / 2, iy + (pressed ? 2 : 0), s, s);
   ctx.restore();
 }
 
