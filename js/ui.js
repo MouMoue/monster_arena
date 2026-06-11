@@ -52,8 +52,8 @@ function skinBtn(id, r, text, kind = 'secondary', fontSize = 18) {
   ctx.textBaseline = 'alphabetic';
 }
 
-// 小方块按钮 + 图标（图标三态: Regular/Pressed/Disable）
-function iconBtn(id, r, iconIdx, kind = 'blue') {
+// 小方块按钮 + 图标（图标三态: Regular/Pressed/Disable；customImg 可传自绘画布）
+function iconBtn(id, r, iconIdx, kind = 'blue', customImg = null) {
   const pressed = uiPressedId === id;
   let img;
   if (kind === 'red') img = pressed ? uiBtn.Red_P : uiBtn.Red;
@@ -61,9 +61,13 @@ function iconBtn(id, r, iconIdx, kind = 'blue') {
   else if (kind === 'disable') img = uiBtn.Disable;
   else img = pressed ? uiBtn.Blue_P : uiBtn.Blue;
   ctx.drawImage(img, r.x, r.y, r.w, r.h);
-  const icon = kind === 'disable' ? uiIcon.Disable[iconIdx] : pressed ? uiIcon.Pressed[iconIdx] : uiIcon.Regular[iconIdx];
+  const icon = customImg || (kind === 'disable' ? uiIcon.Disable[iconIdx] : pressed ? uiIcon.Pressed[iconIdx] : uiIcon.Regular[iconIdx]);
   const s = r.w * 0.62;
+  ctx.save();
+  if (customImg) ctx.imageSmoothingEnabled = false;
+  if (customImg && kind === 'disable') ctx.globalAlpha = 0.45;
   ctx.drawImage(icon, r.x + (r.w - s) / 2, r.y + (r.h - s) / 2 + (pressed ? 2 : 0), s, s);
+  ctx.restore();
 }
 
 // 卡片底（9 宫格）：normal 蓝 / locked 木牌禁用 / equipped 金色 / flash 红按下
@@ -93,6 +97,25 @@ function ribbonTab(id, r, text, color, selected) {
   ctx.textAlign = 'center';
   ctx.fillText(text, r.x + r.w / 2, r.y + h / 2 + 6);
 }
+
+// 冲刺图标：双箭头 »（连贯粗线条，小尺寸下依然清晰）
+const ICON_DASH = (() => {
+  const c = document.createElement('canvas');
+  c.width = 24; c.height = 24;
+  const g = c.getContext('2d');
+  g.lineCap = 'square';
+  g.lineJoin = 'miter';
+  g.strokeStyle = '#2b3142';
+  g.lineWidth = 5;
+  g.beginPath(); g.moveTo(4, 5); g.lineTo(10, 12); g.lineTo(4, 19); g.stroke();
+  g.beginPath(); g.moveTo(13, 5); g.lineTo(19, 12); g.lineTo(13, 19); g.stroke();
+  g.strokeStyle = '#5a6residual';
+  g.strokeStyle = '#56627e';
+  g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(4, 5); g.lineTo(10, 12); g.stroke();
+  g.beginPath(); g.moveTo(13, 5); g.lineTo(19, 12); g.stroke();
+  return c;
+})();
 
 // 像素装备图标（24px，描边+主体+高光，与 hero.js 枪械同风格）
 const EQUIP_ICONS = (() => {

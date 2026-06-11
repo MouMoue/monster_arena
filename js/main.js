@@ -1233,7 +1233,7 @@ function drawHUD() {
 
   drawPauseBtn();
   iconBtn('gameShop', GAME_SHOP_BTN, 6, 'blue');     // 局内商城（进入即暂停）
-  iconBtn('dash', DASH_BTN, 1, (player.dashCd || 0) > 0 ? 'disable' : 'hover');   // 冲刺
+  iconBtn('dash', DASH_BTN, 0, (player.dashCd || 0) > 0 ? 'disable' : 'hover', ICON_DASH);   // 冲刺双箭头
   if ((player.dashCd || 0) > 0) {
     ctx.fillStyle = '#fff';
     ctx.font = '14px -apple-system, sans-serif';
@@ -1260,7 +1260,7 @@ const DASH_BTN = { x: W - 64, y: H - 64, w: 50, h: 50 };
 const PAUSE_DIFF_BTNS = ['easy', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 146 + i * 100, y: H / 2 + 4, w: 92, h: 44 }));
 const GAME_SHOP_BTN = { x: W - 94, y: 10, w: 38, h: 38 };
 function drawPauseBtn() {
-  iconBtn('pause', PAUSE_BTN, 7, state === 'paused' ? 'hover' : 'blue');
+  iconBtn('pause', PAUSE_BTN, 1, state === 'paused' ? 'hover' : 'blue');   // 齿轮 = 设置/暂停
 }
 function inRect(p, r) { return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h; }
 
