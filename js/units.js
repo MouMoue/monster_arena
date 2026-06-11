@@ -96,14 +96,14 @@ function updateUnits(dt) {
       if (!mc.hitDone && frame >= a.hitFrame) {
         mc.hitDone = true;
         if (mc.cls === 'archer') {
-          if (mc.target && !mc.target.dying) fireArrow(mc.x, mc.y - 24, mc.target.x, mc.target.y, mc.dmg);
+          if (mc.target && !mc.target.dying) fireArrow(mc.x, mc.y - 24, mc.target.x, mc.target.y, Math.round(mc.dmg * (typeof runMods !== 'undefined' ? runMods.mercDmg : 1)));
         } else if (mc.cls === 'warrior') {
           for (const m of monsters) {
             if (m.dying) continue;
-            if (Math.hypot(m.x - mc.x, m.y - mc.y) < cfg.aoe + CONFIG.monsters[m.type].radius) damageMonster(m, mc.dmg, 0, 0);
+            if (Math.hypot(m.x - mc.x, m.y - mc.y) < cfg.aoe + CONFIG.monsters[m.type].radius) damageMonster(m, Math.round(mc.dmg * (typeof runMods !== 'undefined' ? runMods.mercDmg : 1)), 0, 0);
           }
         } else if (mc.target && !mc.target.dying) {
-          if (Math.hypot(mc.target.x - mc.x, mc.target.y - mc.y) < cfg.range + 20) damageMonster(mc.target, mc.dmg, 0, 0);
+          if (Math.hypot(mc.target.x - mc.x, mc.target.y - mc.y) < cfg.range + 20) damageMonster(mc.target, Math.round(mc.dmg * (typeof runMods !== 'undefined' ? runMods.mercDmg : 1)), 0, 0);
         }
       }
       if (frame >= a.frames) { mc.state = 'idle'; mc.animT = 0; mc.atkCd = cfg.cooldown; mc.target = null; }
@@ -223,7 +223,7 @@ function updateUnits(dt) {
     const frame = Math.floor(b.t * ex.fps);
     if (!b.done && frame >= ex.dmgFrame) {
       b.done = true;
-      if (Math.hypot(player.x - b.x, player.y - b.y) < ex.radius + CONFIG.player.radius) hurtPlayer(ex.player);
+      if (Math.hypot(player.x - b.x, player.y - b.y) < ex.radius + CONFIG.player.radius) hurtPlayer(ex.player, '爆炸');
       for (const m of monsters) {
         if (m.dying) continue;
         if (Math.hypot(m.x - b.x, m.y - b.y) < ex.radius + CONFIG.monsters[m.type].radius) damageMonster(m, ex.monster, 0, 0);

@@ -27,6 +27,60 @@ let player, bullets, monsters, eprojs, pets, petProjs, effects, floaters;
 let playTime, kills, runCoins, spawnTimer, stats, worldT = 0;
 let boss = null, bossIdx = 0, nextBossT = Infinity, fxList = [];
 let zones = [];          // Boss 持续性地面区域（毒雾等）
+// 局内成长（每局清零）：升级三选一的强化倍率
+let runMods, runXp = 0, runXpNeed = 30, runLv = 1, pendingLvls = 0, runPicked = {}, lvlChoices = [];
+let runDmg = {}, lastKiller = null, runSpawn = [0, 0];
+function freshRunMods() {
+  return { dmg: 1, rate: 1, speed: 1, maxHp: 0, pierce: 0, petCd: 1, magnet: 0, coin: 1, invuln: 1, mercDmg: 1 };
+}
+runMods = freshRunMods();
+// 局外装备 + 局内强化 → 实战属性
+function recomputeStats() {
+  const st = effectiveStats();
+  st.maxHp += runMods.maxHp;
+  st.speed *= runMods.speed;
+  st.invuln *= runMods.invuln;
+  st.magnet += runMods.magnet;
+  st.coinMul *= runMods.coin;
+  st.petCd *= runMods.petCd;
+  st.weapon.damage = Math.round(st.weapon.damage * runMods.dmg);
+  st.weapon.fireRate *= runMods.rate;
+  st.weapon.pierce += runMods.pierce;
+  stats = st;
+}
+// 升级三选一强化池
+const RUN_UPGRADES = [
+  { id: 'dmg',     name: '强化弹药', desc: '武器伤害 +15%',        apply: () => { runMods.dmg *= 1.15; } },
+  { id: 'rate',    name: '快速扳机', desc: '射速 +12%',            apply: () => { runMods.rate *= 1.12; } },
+  { id: 'speed',   name: '轻盈步伐', desc: '移动速度 +8%',         apply: () => { runMods.speed *= 1.08; } },
+  { id: 'hp',      name: '生命强化', desc: '生命上限 +25 并恢复',  apply: () => { runMods.maxHp += 25; player.hp += 25; } },
+  { id: 'pierce',  name: '贯穿弹头', desc: '子弹穿透 +1',  max: 2, apply: () => { runMods.pierce += 1; } },
+  { id: 'petcd',   name: '精灵共鸣', desc: '精灵冷却 -15%',        apply: () => { runMods.petCd *= 0.85; } },
+  { id: 'magnet',  name: '拾取磁场', desc: '拾取范围 +70',         apply: () => { runMods.magnet += 70; } },
+  { id: 'coin',    name: '赏金嗅觉', desc: '金币获取 +15%',        apply: () => { runMods.coin *= 1.15; } },
+  { id: 'invuln',  name: '韧性护体', desc: '受击无敌 +25%',        apply: () => { runMods.invuln *= 1.25; } },
+  { id: 'mercdmg', name: '战旗激励', desc: '佣兵伤害 +25%',        apply: () => { runMods.mercDmg *= 1.25; } },
+  { id: 'heal',    name: '战地急救', desc: '立即回满生命',         apply: () => { player.hp = stats.maxHp; } },
+];
+function rollUpgrades() {
+  const pool = RUN_UPGRADES.filter(u => !u.max || (runPicked[u.id] || 0) < u.max);
+  const picks = [];
+  while (picks.length < 3 && pool.length) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  return picks;
+}
+function openLevelup() { lvlChoices = rollUpgrades(); state = 'levelup'; }
+function chooseUpgrade(i) {
+  const u = lvlChoices[i];
+  if (!u) return;
+  runPicked[u.id] = (runPicked[u.id] || 0) + 1;
+  u.apply();
+  recomputeStats();
+  player.hp = Math.min(player.hp, stats.maxHp);
+  addFloater(player.x, player.y - 76, u.name + '！', '#9FE1CB', 1.2);
+  pendingLvls--;
+  if (pendingLvls > 0) lvlChoices = rollUpgrades();
+  else state = 'playing';
+}
 let shopTab = 'weapon';
 let shopFrom = 'title';      // 商城来源：title / game / gameover（决定返回去向）
 let lastTap = null;
@@ -36,8 +90,12 @@ function diff() { return CONFIG.difficulties[meta.difficulty]; }
 
 function reset() {
   MAPGEN.reset(Math.floor(Math.random() * 2147483647));   // 每局全新世界
-  stats = effectiveStats();
+  runMods = freshRunMods();
+  runXp = 0; runXpNeed = 30; runLv = 1; pendingLvls = 0; runPicked = {}; lvlChoices = [];
+  runDmg = {}; lastKiller = null;
+  recomputeStats();
   const [sx, sy] = MAPGEN.findSpawn();
+  runSpawn = [sx, sy];
   player = {
     x: sx, y: sy,
     hp: stats.maxHp,
@@ -159,10 +217,10 @@ const BOSS_KITS = {
 function bossCast(skill) {
   const bc = CONFIG.monsters[boss.type];
   if (skill === 'slam') {                  // 追踪重压：玩家脚下预警→落地
-    spawnFx('warn', player.x, player.y, { r: 115, life: 0.75, dmg: Math.round(bc.damage * 1.3), color: 'rgba(230,60,70,0.9)' });
+    spawnFx('warn', player.x, player.y, { r: 115, life: 0.75, dmg: Math.round(bc.damage * 1.3), src: bc.bossName + '·重压', color: 'rgba(230,60,70,0.9)' });
   } else if (skill === 'whirl') {          // 旋风斩：以自身为中心大范围扫击
     addFloater(boss.x, boss.y - 110, '旋风斩！', '#FFD27A', 1.1);
-    spawnFx('warn', boss.x, boss.y, { r: 195, life: 0.7, dmg: Math.round(bc.damage * 1.5) });
+    spawnFx('warn', boss.x, boss.y, { r: 195, life: 0.7, dmg: Math.round(bc.damage * 1.5), src: bc.bossName + '·旋风斩' });
   } else if (skill === 'warcry') {         // 战吼：周围小怪狂暴加速
     addFloater(boss.x, boss.y - 110, '战吼！小的们上！', '#FF9090', 1.4);
     spawnFx('shockwave', boss.x, boss.y + 6, { r: 330, color: '#ff8a5a', life: 0.6 });
@@ -193,7 +251,7 @@ function bossCast(skill) {
     addFloater(boss.x, boss.y - 120, '三连斩！', '#E8E8F0', 1.2);
     for (let k = 0; k < 3; k++) {
       spawnFx('warn', player.x + (Math.random() - 0.5) * 70, player.y + (Math.random() - 0.5) * 70,
-        { r: 105, life: 0.55 + k * 0.38, dmg: Math.round(bc.damage * 0.9) });
+        { r: 105, life: 0.55 + k * 0.38, dmg: Math.round(bc.damage * 0.9), src: bc.bossName + '·三连斩' });
     }
   } else if (skill === 'bonering') {       // 白骨牢笼：环绕玩家的骨刺阵（从缝隙逃生）
     addFloater(boss.x, boss.y - 120, '白骨牢笼！', '#E8E8F0', 1.3);
@@ -201,7 +259,7 @@ function bossCast(skill) {
     for (let k = 0; k < n; k++) {
       const a = k / n * Math.PI * 2 + Math.random() * 0.3;
       spawnFx('warn', player.x + Math.cos(a) * 150, player.y + Math.sin(a) * 150,
-        { r: 80, life: 0.85, dmg: Math.round(bc.damage * 1.0) });
+        { r: 80, life: 0.85, dmg: Math.round(bc.damage * 1.0), src: bc.bossName + '·白骨牢笼' });
     }
   } else if (skill === 'minions') {        // 召唤同族小怪
     const t = boss.type === 'bossEye' ? 'flyingEye' : 'skeleton';
@@ -214,6 +272,25 @@ function bossCast(skill) {
   }
 }
 
+// Boss tint 整张雪碧图预渲染缓存（替代逐帧 ctx.filter，移动端性能关键）
+function tintedImg(type, key) {
+  const cfg = CONFIG.monsters[type];
+  const base = images[type][key];
+  if (!base || !base.complete || !base.naturalWidth) return base;
+  const cacheMap = (images[type]._tint = images[type]._tint || {});
+  let t = cacheMap[key];
+  if (!t) {
+    t = document.createElement('canvas');
+    t.width = base.naturalWidth;
+    t.height = base.naturalHeight;
+    const g = t.getContext('2d');
+    g.filter = cfg.tint;
+    g.drawImage(base, 0, 0);
+    cacheMap[key] = t;
+  }
+  return t;
+}
+
 // ---------- 程序化特效（Boss 攻击）：冲击波 / 范围预警 / 落地冲击 ----------
 function spawnFx(kind, x, y, o = {}) { fxList.push(Object.assign({ kind, x, y, t: 0, life: o.life || 0.5 }, o)); }
 function updateFx(dt) {
@@ -223,7 +300,7 @@ function updateFx(dt) {
     if (f.kind === 'warn' && !f.fired && f.t >= f.life) {       // 预警结束 → 落地伤害
       f.fired = true;
       spawnFx('slam', f.x, f.y, { life: 0.32, r: f.r });
-      if (f.dmg && Math.hypot(player.x - f.x, player.y - f.y) < f.r) hurtPlayer(f.dmg);
+      if (f.dmg && Math.hypot(player.x - f.x, player.y - f.y) < f.r) hurtPlayer(f.dmg, f.src || 'Boss 技能');
     }
     if (f.t >= f.life) fxList.splice(i, 1);
   }
@@ -331,10 +408,14 @@ function nearestMonster(fx, fy, range) {
   return best;
 }
 
-function hurtPlayer(dmg) {
+function hurtPlayer(dmg, src) {
   if (player.invuln > 0) return;
   player.hp -= Math.round(dmg * diff().dmgMul);
   player.invuln = stats.invuln;
+  if (src) {
+    runDmg[src] = (runDmg[src] || 0) + Math.round(dmg * diff().dmgMul);
+    lastKiller = src;
+  }
   if (window.AUDIO) AUDIO.hurt();
   if (player.hp <= 0) { player.hp = 0; gameOver(); }
 }
@@ -349,8 +430,16 @@ function grantCoins(n) {
 function grantXp(n) {
   const before = levelInfo().lv;
   meta.xp += n;
+  runXp += n;
+  while (runXp >= runXpNeed) {           // 局内升级：暂停并三选一
+    runXp -= runXpNeed;
+    runXpNeed = Math.round(runXpNeed * 1.42);
+    runLv++;
+    pendingLvls++;
+  }
+  if (pendingLvls > 0 && state === 'playing') openLevelup();
   const after = levelInfo().lv;
-  if (after > before) addFloater(player.x, player.y - 60, `升级 Lv.${after}！`, '#9FE1CB', 1.3);
+  if (after > before) addFloater(player.x, player.y - 60, `账号升级 Lv.${after}！`, '#FAC775', 1.3);
 }
 
 function onKill(m) {
@@ -358,7 +447,8 @@ function onKill(m) {
   if (window.AUDIO) AUDIO.kill(m);
   const cfg = CONFIG.monsters[m.type];
   const tb = 1 + (m.tier || 0) * 0.6;
-  const gain = Math.round(cfg.coin * diff().coinMul * tb * (stats.coinMul || 1));
+  const farMul = 1 + Math.min(0.6, Math.hypot(m.x - runSpawn[0], m.y - runSpawn[1]) / 6000);   // 离出生点越远收益越高
+  const gain = Math.round(cfg.coin * diff().coinMul * tb * (stats.coinMul || 1) * farMul);
   grantCoins(gain);
   grantXp(Math.round(cfg.xp * tb * (stats.xpMul || 1)));
   addFloater(m.x, m.y - 40, `+${gain}`, '#FAC775');
@@ -367,6 +457,12 @@ function onKill(m) {
   if (cfg.boss) {
     boss = null;
     nextBossT = playTime + CONFIG.bossSchedule.gap;
+    grantCoins(100);                                  // 击杀分红
+    for (let k = 0; k < 6; k++) {                     // 金币雨
+      const a = Math.random() * Math.PI * 2, dd = 30 + Math.random() * 70;
+      spawnPickup('gold', m.x + Math.cos(a) * dd, m.y + Math.sin(a) * dd);
+    }
+    spawnPickup('meat', m.x, m.y + 40);
     addFloater(m.x, m.y - 110, cfg.bossName + ' 被击败！', '#FFD27A', 3.2);
   }
 }
@@ -375,7 +471,7 @@ function onKill(m) {
 function applyLoadout() {
   if (!player) return;
   const oldMax = stats.maxHp;
-  stats = effectiveStats();
+  recomputeStats();
   if (stats.maxHp > oldMax) player.hp += stats.maxHp - oldMax;
   player.hp = Math.min(player.hp, stats.maxHp);
   player.weaponId = meta.weapon;
@@ -433,6 +529,17 @@ function damageMonster(m, dmg, kbx, kby) {
 function update(dt) {
   playTime += dt;
 
+  player.dashCd = (player.dashCd || 0) - dt;
+  if (player.dashT > 0) {                // 冲刺：高速位移 + 短无敌
+    player.dashT -= dt;
+    const sp = stats.speed * CONFIG.dash.mul;
+    const nx = player.x + player.dashDx * sp * dt, ny = player.y + player.dashDy * sp * dt;
+    if (MAPGEN.walkable(nx, player.y)) player.x = nx;
+    if (MAPGEN.walkable(player.x, ny)) player.y = ny;
+    player.invuln = Math.max(player.invuln, 0.06);
+    player.moving = true;
+    player.animT += dt;                  // 跑动帧
+  } else {
   player.moving = input.moveX !== 0 || input.moveY !== 0;
   if (player.moving) {
     player.dirX = input.moveX;          // 记录移动朝向，佣兵/精灵列队在身后
@@ -442,6 +549,7 @@ function update(dt) {
     if (MAPGEN.walkable(nx, player.y)) player.x = nx;
     if (MAPGEN.walkable(player.x, ny)) player.y = ny;
     player.phase = (player.phase + dt * 2.2) % 1;
+  }
   }
   updateCam();
   if (stats.regen && player.hp > 0) player.hp = Math.min(stats.maxHp, player.hp + stats.regen * dt);
@@ -453,7 +561,14 @@ function update(dt) {
   // 自动锁定 + 自动开火
   // 瞄准角相对固定点（身体中心+手部高度）计算，不随朝向偏移，避免目标在正上/正下时来回翻面
   const SPR = CONFIG.player.sprite;
-  const target = nearestMonster(player.x, player.y, 520);
+  let target = null, bestScore = Infinity;        // 威胁加权锁定：优先投弹手/自爆桶/Boss
+  for (const m of monsters) {
+    if (m.dying) continue;
+    const d = Math.hypot(m.x - player.x, m.y - player.y);
+    if (d > 520) continue;
+    const sc = d / (CONFIG.threat[m.type] || 1);
+    if (sc < bestScore) { bestScore = sc; target = m; }
+  }
   player.lockTarget = target;
   if (target) {
     const gx = player.x, gy = player.y + SPR.handY;
@@ -669,7 +784,7 @@ function update(dt) {
       m.flip = m.dashVx < 0;
       if (!m.dashHit && Math.hypot(player.x - m.x, player.y - m.y) < cfg.radius + CONFIG.player.radius) {
         m.dashHit = true;
-        hurtPlayer(cfg.damage * 1.2);
+        hurtPlayer(cfg.damage * 1.2, (cfg.bossName || '魔王') + '的俯冲');
         spawnFx('shockwave', m.x, m.y + 6, { r: 130, color: '#9fd0ff', life: 0.4 });
       }
       continue;
@@ -694,7 +809,7 @@ function update(dt) {
           throwDynamite(m.x, m.y - 24, player.x, player.y);
         } else if (cfg.behavior === 'melee') {
           if (d < cfg.attackRange + CONFIG.player.radius + 12) {
-            hurtPlayer(cfg.damage * (m.dmgMul || 1));
+            hurtPlayer(cfg.damage * (m.dmgMul || 1), (cfg.bossName || CONFIG.monsterNames[m.type] || '怪物') + '的攻击');
             if (cfg.fireFx) spawnFireFx(player.x, player.y);
           }
           if (cfg.boss) spawnFx('shockwave', m.x, m.y + 6, { r: cfg.attackRange * 1.7, color: '#ffd27a', life: 0.45 });
@@ -738,7 +853,7 @@ function update(dt) {
     e.y += e.vy * dt;
     if (Math.hypot(e.x - player.x, e.y - player.y) > 800) { eprojs.splice(i, 1); continue; }
     if (Math.hypot(e.x - player.x, e.y - player.y) < p.radius + CONFIG.player.radius) {
-      hurtPlayer(CONFIG.monsters[e.type].damage);
+      hurtPlayer(CONFIG.monsters[e.type].damage, '孢子弹幕');
       eprojs.splice(i, 1);
     }
   }
@@ -804,7 +919,7 @@ function update(dt) {
     z.tick -= dt;
     if (z.tick <= 0) {
       z.tick = z.tickCd;
-      if (Math.hypot(player.x - z.x, player.y - z.y) < z.r + CONFIG.player.radius * 0.5) hurtPlayer(z.dmg);
+      if (Math.hypot(player.x - z.x, player.y - z.y) < z.r + CONFIG.player.radius * 0.5) hurtPlayer(z.dmg, '毒雾');
     }
   }
 }
@@ -863,6 +978,20 @@ function drawGround(visChunks) {
       }
     }
   }
+  // 雪原覆盖（低频生物群系，边缘渐变）
+  for (let ty = ty0; ty <= ty1; ty++) {
+    for (let tx = tx0; tx <= tx1; tx++) {
+      if (!MAPGEN.landAt(tx, ty)) continue;
+      const sn = MAPGEN.snowAt(tx, ty);
+      if (sn > 0) {
+        ctx.globalAlpha = sn * 0.48;
+        ctx.fillStyle = '#e9eefb';
+        ctx.fillRect(tx * t, ty * t, t, t);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+
   // 栈桥与平面装饰（地面层）
   for (const c of visChunks) {
     for (const sc of c.scenery) {
@@ -910,13 +1039,19 @@ function drawMonster(m) {
     ctx.beginPath(); ctx.ellipse(m.x, m.y + 14, cfg.radius * 1.7, cfg.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
+  if (m.slowT > 0 || m.rageT > 0) {        // 状态色环（替代昂贵的逐帧 ctx.filter）
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = m.slowT > 0 ? '#6fb8ff' : '#ff5040';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(m.x, m.y + 12, cfg.radius + 10, (cfg.radius + 10) * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.translate(m.x, m.y - cfg.bodyOffsetY * cfg.scale);
   if (m.flip) ctx.scale(-1, 1);
-  let _flt = cfg.tint ? cfg.tint : '';
-  if (m.slowT > 0) _flt += ' saturate(0.4) brightness(1.25)';
-  else if (m.rageT > 0) _flt += ' saturate(1.9) brightness(1.12)';
-  if (_flt) ctx.filter = _flt.trim();
-  const img = cfg.tierSheets ? images[m.type].tiers[m.tier] : images[m.type][key];
+  const img = cfg.tint ? tintedImg(m.type, key) : (cfg.tierSheets ? images[m.type].tiers[m.tier] : images[m.type][key]);
   const row = cfg.tierSheets ? a.row : 0;
   ctx.drawImage(img, f * fw, row * fw, fw, fw, -size / 2, -size / 2, size, size);
   ctx.restore();
@@ -1081,6 +1216,13 @@ function drawHUD() {
   ctx.font = '20px -apple-system, sans-serif';
   ctx.fillStyle = C.hud;
   ctx.fillText(fmtTime(playTime), W / 2, 32);
+  ctx.fillStyle = C.hpBack;                       // 局内升级进度条
+  ctx.fillRect(W / 2 - 70, 40, 140, 7);
+  ctx.fillStyle = '#FAC775';
+  ctx.fillRect(W / 2 - 70, 40, 140 * Math.min(1, runXp / runXpNeed), 7);
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillStyle = C.hudDim;
+  ctx.fillText(`局内 Lv.${runLv}`, W / 2, 60);
 
   ctx.textAlign = 'right';
   ctx.font = '16px -apple-system, sans-serif';
@@ -1091,6 +1233,13 @@ function drawHUD() {
 
   drawPauseBtn();
   iconBtn('gameShop', GAME_SHOP_BTN, 6, 'blue');     // 局内商城（进入即暂停）
+  iconBtn('dash', DASH_BTN, 1, (player.dashCd || 0) > 0 ? 'disable' : 'hover');   // 冲刺
+  if ((player.dashCd || 0) > 0) {
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(Math.ceil(player.dashCd), DASH_BTN.x + DASH_BTN.w / 2, DASH_BTN.y + DASH_BTN.h / 2 + 5);
+  }
   drawBossBar();
 }
 
@@ -1107,6 +1256,7 @@ function drawBossBar() {
 }
 
 const PAUSE_BTN = { x: W - 50, y: 10, w: 38, h: 38 };
+const DASH_BTN = { x: W - 64, y: H - 64, w: 50, h: 50 };
 const PAUSE_DIFF_BTNS = ['easy', 'hard', 'nightmare'].map((id, i) => ({ id, x: W / 2 - 146 + i * 100, y: H / 2 + 4, w: 92, h: 44 }));
 const GAME_SHOP_BTN = { x: W - 94, y: 10, w: 38, h: 38 };
 function drawPauseBtn() {
@@ -1406,9 +1556,40 @@ function drawShop() {
   }
 }
 
+// ---------- 局内升级三选一 ----------
+const LVL_CARDS = [0, 1, 2].map(i => ({ x: W / 2 - 392 + i * 268, y: H / 2 - 64, w: 248, h: 158 }));
+function drawLevelup() {
+  ctx.fillStyle = 'rgba(10,10,24,0.62)';
+  ctx.fillRect(0, 0, W, H);
+  ribbonHeader('Yellow', W / 2, H / 2 - 152, 340, `升级！选择一项强化（局内 Lv.${runLv}）`, 17);
+  lvlChoices.forEach((u, i) => {
+    const r = LVL_CARDS[i];
+    cardBg(r, 'normal', uiPressedId === 'lvl' + i);
+    ctx.drawImage(uiIcon.Regular[3 + i], r.x + r.w / 2 - 16, r.y + 14, 32, 32);
+    ctx.fillStyle = UI_TEXT;
+    ctx.font = '17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(u.name, r.x + r.w / 2, r.y + 76);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(90,58,26,0.8)';
+    ctx.fillText(u.desc, r.x + r.w / 2, r.y + 102);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(90,58,26,0.55)';
+    ctx.fillText(`按 ${i + 1} 或点击`, r.x + r.w / 2, r.y + 134);
+  });
+}
+
 // ---------- 结算 ----------
 const RESTART_BTN = { x: W / 2 - 230, y: H / 2 + 96, w: 220, h: 52 };
 const GO_SHOP_BTN = { x: W / 2 + 10, y: H / 2 + 96, w: 220, h: 52 };
+
+function deathTip(src) {
+  if (src.includes('爆') || src.includes('自爆')) return '提示：自爆桶贴脸前先打死，TNT 红圈落点别站；空格冲刺可救命';
+  if (src.includes('孢子') || src.includes('毒')) return '提示：侧向移动躲弹幕，绿色毒雾别久留；疾跑靴值得买';
+  if (src.includes('俯冲')) return '提示：蓝圈是俯冲落点，往垂直方向闪开';
+  if (src.includes('重压') || src.includes('旋风') || src.includes('斩') || src.includes('牢笼')) return '提示：红圈预警出现立刻离开，白骨牢笼要找缝隙钻';
+  return '提示：被围殴时空格冲刺脱身；商城的皮甲和再生戒指能救命';
+}
 
 function drawGameover() {
   const best = loadBest();
@@ -1424,20 +1605,46 @@ function drawGameover() {
   ctx.fillText(`本局金币 +${runCoins}　总金币 ${meta.coins}`, W / 2, H / 2 - 32);
   ctx.fillStyle = 'rgba(90,58,26,0.8)';
   if (best) ctx.fillText(`最佳：存活 ${fmtTime(best.time)}　击杀 ${best.kills}`, W / 2, H / 2 - 2);
-  ctx.fillText('按 R 重开 · 按 B 进商城', W / 2, H / 2 + 28);
+  if (lastKiller) {
+    ctx.fillStyle = '#A32D2D';
+    ctx.fillText(`死于：${lastKiller}`, W / 2, H / 2 + 26);
+    ctx.fillStyle = C.hudDim;
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText(deathTip(lastKiller), W / 2, H / 2 + 50);
+    ctx.font = '16px -apple-system, sans-serif';
+  } else {
+    ctx.fillText('按 R 重开 · 按 B 进商城', W / 2, H / 2 + 28);
+  }
   skinBtn('restart', RESTART_BTN, '再来一局', 'primary', 20);
   skinBtn('goshop', GO_SHOP_BTN, '商城', 'secondary', 20);
 }
 
+const vigCanvas = (() => {            // 暗角 + 暖色统一层（预渲染，一次绘制开销）
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const rg = g.createRadialGradient(W / 2, H / 2, H * 0.44, W / 2, H / 2, H * 0.80);
+  rg.addColorStop(0, 'rgba(28,22,46,0)');
+  rg.addColorStop(1, 'rgba(22,16,38,0.36)');
+  g.fillStyle = rg;
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,212,150,0.05)';
+  g.fillRect(0, 0, W, H);
+  return c;
+})();
+
 function draw() {
   ctx.setTransform(viewScale, 0, 0, viewScale, 0, 0);
   drawWorldScene();
+  ctx.drawImage(vigCanvas, 0, 0, W, H);
   if (state === 'title') { drawTitle(); }
   else if (state === 'shop') { drawShop(); }
   else {
     drawHUD();
     drawTouchControls();
-    if (state === 'paused') {
+    if (state === 'levelup') {
+      drawLevelup();
+    } else if (state === 'paused') {
       ctx.fillStyle = 'rgba(10,10,24,0.6)';
       ctx.fillRect(0, 0, W, H);
       nine(uiBanner.carved9, W / 2 - 220, H / 2 - 100, 440, 210);
@@ -1472,7 +1679,30 @@ function syncBgm() {                              // BGM 跟随场景：Boss战 
   if (state === 'playing' || state === 'paused') want = (boss && !boss.dying) ? 'boss' : 'battle';
   if (want !== _bgmWant) { _bgmWant = want; AUDIO.startBGM(want); }
 }
-function startGame() { state = 'playing'; reset(); if (window.AUDIO) AUDIO.unlock(); }
+function tryDash() {
+  if (state !== 'playing' || player.dashT > 0 || (player.dashCd || 0) > 0) return;
+  let dx = input.moveX, dy = input.moveY;
+  if (!dx && !dy) { dx = player.aim.x; dy = player.aim.y; }
+  const d = Math.hypot(dx, dy) || 1;
+  player.dashDx = dx / d;
+  player.dashDy = dy / d;
+  player.dashT = CONFIG.dash.dur;
+  player.dashCd = CONFIG.dash.cd;
+  spawnFx('shockwave', player.x, player.y + 16, { r: 64, color: '#cfe8ff', life: 0.28 });
+}
+
+function startGame() {
+  state = 'playing';
+  reset();
+  if (window.AUDIO) AUDIO.unlock();
+  if (!meta.tipSeen) {                   // 首局三句话教学
+    meta.tipSeen = true;
+    saveMeta();
+    addFloater(player.x, player.y - 96, '自动开火：你只管走位！', '#9FE1CB', 4);
+    addFloater(player.x, player.y + 72, '红圈 = 危险落点，赶紧离开', '#FFB0B0', 6);
+    addFloater(player.x, player.y + 100, '空格 / 右下角按钮 = 冲刺闪避', '#9fd0ff', 8);
+  }
+}
 
 function handleUI(dt) {
   uiTick(dt);
@@ -1480,6 +1710,11 @@ function handleUI(dt) {
   for (const code of input.keyPresses) {
     if (code === 'KeyM') { if (window.AUDIO) AUDIO.toggleMute(); continue; }
     if (code === 'KeyG' && state === 'playing') { nextBossT = 0; continue; }   // 调试：立即召唤 Boss
+    if (state === 'levelup') {
+      if (/^Digit[1-3]$/.test(code)) { uiPress('lvl' + (Number(code[5]) - 1)); chooseUpgrade(Number(code[5]) - 1); }
+      continue;
+    }
+    if (state === 'playing' && code === 'Space') { tryDash(); continue; }
     if (state === 'title') {
       if (code === 'Digit1') { meta.difficulty = 'easy'; saveMeta(); }
       else if (code === 'Digit2') { meta.difficulty = 'hard'; saveMeta(); }
@@ -1507,6 +1742,13 @@ function handleUI(dt) {
   }
   for (const p of input.taps) {
     lastTap = { x: p.x, y: p.y, t: 0 };
+    if (state === 'levelup') {
+      for (let i = 0; i < LVL_CARDS.length; i++) {
+        if (inRect(p, LVL_CARDS[i])) { uiPress('lvl' + i); chooseUpgrade(i); }
+      }
+      continue;
+    }
+    if (state === 'playing' && inRect(p, DASH_BTN)) { uiPress('dash'); tryDash(); continue; }
     if (state === 'title') {
       for (let i = 0; i < DIFF_BTNS.length; i++) {
         if (inRect(p, DIFF_BTNS[i])) { meta.difficulty = DIFF_BTNS[i].id; saveMeta(); uiPress('diff' + i); }
@@ -1578,11 +1820,23 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-let loadedImgs = 0;
+let loadedImgs = 0, bootStarted = false;
+function bootGame() {
+  if (bootStarted) return;
+  bootStarted = true;
+  reset();
+  requestAnimationFrame(loop);
+}
 function imgDone() {
-  if (++loadedImgs === pending.length) { reset(); requestAnimationFrame(loop); }
+  if (++loadedImgs >= pending.length) bootGame();
 }
 pending.forEach(img => {
   img.onload = imgDone;
   img.onerror = () => { console.error('加载失败: ' + img.src); imgDone(); };   // 缺图不卡启动
 });
+// 保底启动：缓存图片的 onload 偶发不触发计数（竞态），轮询兜底 + 8 秒强制开局
+const bootPoll = setInterval(() => {
+  if (bootStarted) { clearInterval(bootPoll); return; }
+  if (pending.every(img => img.complete)) { clearInterval(bootPoll); bootGame(); }
+}, 700);
+setTimeout(bootGame, 8000);

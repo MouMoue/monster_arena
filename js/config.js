@@ -291,6 +291,13 @@ const CONFIG = {
 
   stagger: 1.4,
 
+  // 自动锁定威胁权重（值越高越优先；等效距离 = 实际距离 / threat）
+  threat: { tntGob: 1.4, mushroom: 1.3, barrelGob: 1.7, bossGoblin: 1.2, bossEye: 1.2, bossMushroom: 1.25, bossSkeleton: 1.2 },
+  // 死因归属用名册
+  monsterNames: { goblin: '哥布林', flyingEye: '飞眼', mushroom: '蘑菇怪', skeleton: '骷髅', torchGob: '火把哥布林', tntGob: 'TNT哥布林', barrelGob: '自爆桶' },
+  // 冲刺：短无敌位移（空格 / 触屏右下按钮）
+  dash: { dur: 0.17, mul: 3.4, cd: 3 },
+
   difficulty: [
     { until: 30,       interval: 1.6,  cap: 10, hpMul: 1.0, weights: { goblin: 0.55, torchGob: 0.45 } },
     { until: 60,       interval: 0.95, cap: 20, hpMul: 1.3, weights: { goblin: 0.3, flyingEye: 0.2, torchGob: 0.3, tntGob: 0.2 } },

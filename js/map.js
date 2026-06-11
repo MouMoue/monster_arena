@@ -24,6 +24,11 @@ const MAPGEN = (() => {
     return n > 0.55 ? 2 : n > 0.40 ? 1 : 0;   // 陆地占比 ~70%，大陆更连贯
   }
   const landAt = (tx, ty) => terrainAt(tx, ty) >= 1;
+  // 雪原生物群系：低频噪声划分区域，返回 0-1 覆盖强度（边缘渐变）
+  function snowAt(tx, ty) {
+    const b = noise(tx / 52 + 9000, ty / 52 + 9000);
+    return b > 0.62 ? Math.min(1, (b - 0.62) / 0.05) : 0;
+  }
   const grassAt = (tx, ty) => terrainAt(tx, ty) === 2;
 
   function mulberry(seed) {
@@ -230,5 +235,5 @@ const MAPGEN = (() => {
     return [T / 2, T / 2];
   }
 
-  return { T, CH, terrainAt, landAt, grassAt, walkable, autotileSrc, chunkAt, visibleChunks, pierAt, reset, findSpawn, hash2 };
+  return { T, CH, terrainAt, landAt, grassAt, snowAt, walkable, autotileSrc, chunkAt, visibleChunks, pierAt, reset, findSpawn, hash2 };
 })();
